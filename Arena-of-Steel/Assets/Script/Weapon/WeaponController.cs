@@ -6,10 +6,10 @@ using static PlayerModel;
 
 public class WeaponController : MonoBehaviour
 {
-    private PlayerController characterController;
+    /*private PlayerController characterController;
 
 
-    [Header("¼³Á¤")]
+    [Header("ï¿½ï¿½ï¿½ï¿½")]
     public WeaponSettingsModel WeaponSet;
 
     bool isInitialised;
@@ -158,5 +158,5 @@ public class WeaponController : MonoBehaviour
 
 
         StartCoroutine(Reload());
-    }
+    }*/
 }

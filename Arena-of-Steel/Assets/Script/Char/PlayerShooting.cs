@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 
 public class PlayerShooting : MonoBehaviour
 {
-    public WeaponController Gun;
+    /*public WeaponController Gun;
     public bool isHoldingShoot = false;
 
     private PlayerInput defaultInput;
@@ -58,5 +58,5 @@ public class PlayerShooting : MonoBehaviour
 
 
 
-    }
+    }*/
 }

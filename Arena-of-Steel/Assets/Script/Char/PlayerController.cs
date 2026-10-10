@@ -1,375 +1,181 @@
 using UnityEngine;
-using static PlayerModel;
+
+public enum ControlMode
+{
+    FirstPersonView,
+    ThirdPersonView,
+}
 
 public class PlayerController : MonoBehaviour
 {
-    private CharacterController characterController;
+    [SerializeField] private Renderer[] firstPersonHiddenRenderers;
+    private CameraModeController cameraModeController;
 
-    private PlayerInput defaultInput;
+    [Header("카메라 설정")]
+    [SerializeField] private ControlMode controlMode = ControlMode.FirstPersonView;
+    [SerializeField] private Transform cameraTarget;
+    [SerializeField] private float topClamp = 70f;
+    [SerializeField] private float bottomClamp = -70f;
+    private float cameraYaw;
+    private float cameraPitch;
 
-    public Vector2 input_Movement;
-    [HideInInspector]
-    public Vector2 input_View;
+    [Header("이동 설정")]
+    [SerializeField] private float walkSpeed = 3f;
+    [SerializeField] private float runSpeed = 6f;
+    [SerializeField] private float rotationSpeed = 10f;
 
+    [Header("점프 설정")]
+    [SerializeField] private float jumpPower = 2f;
 
-    private Vector3 newCamRotation;
-    private Vector3 newCharactorRotation;
+    [Header("바닥 설정")]
+    [SerializeField] private float gravity = -20f;
 
-    [Header("Ref")]
-    public Transform camHolder;
-    public Transform feetTransfrom;
+    private CharacterController controller;
+    private InputSystem_Actions inputActions;
+    private Vector3 moveVelocity;
+    private float verticalVelocity;
 
-    [Header("설정")]
-    public PlayerSettingsModel playerSet;
-
-    public float viewClampYmin= -70;
-    public float viewClampYmax= 80;
-
-    public LayerMask playerMask;
-
-    [Header("중력")]
-    public float gravityAmount;
-    public float gravityMin;
-    private float playerGravity;
-
-    public Vector3 jumpingForce;
-    private Vector3 jumpingForceVelocity;
-
-    [Header("자세")]
-    public PlayerStance playerStance;
-
-    public float playerStanceSmoothing;
-
-    public CharacterStance PlayerStandStance;
-    public CharacterStance PlayerCrouchStance;
-    public CharacterStance PlayerProneStance;
-
-    private float stanceCheckForError = 0.05f;
-
-    private float cameraHeight;
-    private float cameraHeightVelocity;
-
-    private Vector3 stanceCapsuleCenterVelocity;
-    private float stanceCapsuleHeightVelocity;
-
-    private bool isSprinting;
-
-    private Vector3 newMovementSpeed;
-    private Vector3 newMovementSpeedVelocity;
-
-
-    [Header("Weapon")]
-    public WeaponController currentWeapon;
-
-    public Animator anime;
-
+    public InputSystem_Actions InputActions => inputActions;
 
     private void Awake()
     {
-        defaultInput = new PlayerInput();
-
-        defaultInput.OnFoot.Movement.performed += e => input_Movement = e.ReadValue<Vector2>();
-        defaultInput.OnFoot.View.performed += e => input_View = e.ReadValue<Vector2>();
-        defaultInput.OnFoot.Jump.performed += e => Jump();
-
-        defaultInput.OnFoot.Crouch.performed += e => Crouch();
-        defaultInput.OnFoot.Prone.performed += e => Prone();
-
-        defaultInput.OnFoot.Sprint.performed += e => ToggleSprint();
-        defaultInput.OnFoot.SprintReleased.performed += e => StopSprint();
-
-        defaultInput.Enable();
-
-
-        newCamRotation = camHolder.localRotation.eulerAngles;
-        newCharactorRotation = transform.localRotation.eulerAngles;
-
-        characterController = GetComponent<CharacterController>();
-
-        cameraHeight = camHolder.localPosition.y;
-
-
-        if(currentWeapon)
-        {
-            currentWeapon.Initialise(this);
-        }
-
-
-
+        controller = GetComponent<CharacterController>();
+        inputActions = new InputSystem_Actions();
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
+        cameraYaw = transform.eulerAngles.y;
+        cameraPitch = 0f;
 
+        cameraModeController = GetComponent<CameraModeController>();
+        cameraModeController?.BindTrackingTarget(cameraTarget);
+    }
 
+    private void Start()
+    {
+        SetControlMode(controlMode);
+    }
 
+    private void OnEnable()
+    {
+        inputActions?.Player.Enable();
+    }
+
+    private void OnDisable()
+    {
+        inputActions?.Disable();
+    }
+
+    private void OnDestroy()
+    {
+        if (inputActions != null)
+        {
+            inputActions.Disable();
+            inputActions.Dispose();
+            inputActions = null;
+        }
     }
 
     private void Update()
     {
-        CalculateView();
-        CalculateMovement();
-        CalculateJump();
-        CalculateStance();
-
-
-
-
-
-
-
-        if (!isSprinting)
+        if (inputActions != null && inputActions.Player.ToggleView.WasPressedThisFrame())
         {
-            if (Mathf.Abs(input_Movement.x) > 0 || Mathf.Abs(input_Movement.y) > 0)
-            {
-                anime.SetBool("isWalk", true);
-            }
-            else if (input_Movement.x == 0 || input_Movement.y == 0)
-            {
-                anime.SetBool("isWalk", false);
-            }
+            SetControlMode(controlMode == ControlMode.FirstPersonView ? ControlMode.ThirdPersonView : ControlMode.FirstPersonView);
         }
 
+        HandleLook();
+        HandleMovement();
+        HandleJump();
+        ApplyGravity();
+    }
 
-        if(isSprinting)
+    private void HandleLook()
+    {
+        if (inputActions == null || cameraTarget == null) return;
+
+        Vector2 lookInput = inputActions.Player.Look.ReadValue<Vector2>();
+        float sens = CameraSensitivity.Instance != null ? CameraSensitivity.Instance.Sensitivity : 1f;
+        bool invertY = CameraSensitivity.Instance != null && CameraSensitivity.Instance.InvertY;
+
+        float deltaMultiplier = 0.1f * sens;
+        cameraYaw += lookInput.x * deltaMultiplier;
+        cameraPitch += (invertY ? lookInput.y : -lookInput.y) * deltaMultiplier;
+        cameraPitch = Mathf.Clamp(cameraPitch, bottomClamp, topClamp);
+
+        if (controlMode == ControlMode.FirstPersonView)
         {
-            anime.SetBool("Running", true);
+            transform.rotation = Quaternion.Euler(0f, cameraYaw, 0f);
+            cameraTarget.localRotation = Quaternion.Euler(cameraPitch, 0f, 0f);
         }
         else
         {
-            anime.SetBool("Running", false);
+            cameraTarget.rotation = Quaternion.Euler(cameraPitch, cameraYaw, 0f);
         }
-
     }
 
-
-    private void CalculateView()
+    private void HandleMovement()
     {
+        Vector2 input = inputActions.Player.Move.ReadValue<Vector2>();
+        input = Vector2.ClampMagnitude(input, 1f);
 
-        newCharactorRotation.y += playerSet.ViewXSensitivity * input_View.x * Time.deltaTime;
-        transform.localRotation = Quaternion.Euler(newCharactorRotation);
+        bool isRunning = inputActions.Player.Sprint.IsPressed();
+        float currentSpeed = isRunning ? runSpeed : walkSpeed;
 
+        Transform camRef = cameraTarget != null ? cameraTarget : transform;
+        Vector3 camForward = Vector3.ProjectOnPlane(camRef.forward, Vector3.up).normalized;
+        Vector3 camRight = Vector3.ProjectOnPlane(camRef.right, Vector3.up).normalized;
+        Vector3 moveDirection = camForward * input.y + camRight * input.x;
 
-        newCamRotation.x += playerSet.ViewYSensitivity * input_View.y * Time.deltaTime;
+        if (controlMode == ControlMode.ThirdPersonView && moveDirection.sqrMagnitude > 0.001f)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
+        }
 
-        newCamRotation.x = Mathf.Clamp(newCamRotation.x, viewClampYmin, viewClampYmax);
-
-        camHolder.localRotation = Quaternion.Euler(newCamRotation);
-
-        
-
-
+        moveVelocity = moveDirection * currentSpeed;
     }
 
-
-    private void CalculateMovement()
+    private void HandleJump()
     {
+        if (controller == null || !controller.enabled) return;
 
-        if(input_Movement.y <= 0.2f)
+        if (inputActions.Player.Jump.WasPressedThisFrame() && controller.isGrounded)
         {
-            isSprinting = false;
+            verticalVelocity = Mathf.Sqrt(jumpPower * -2f * gravity);
         }
+    }
 
+    private void ApplyGravity()
+    {
+        if (controller == null || !controller.enabled) return;
 
-
-
-        var verticalSpeed = playerSet.WalkingFowardSpeed;
-        var horizontalSpeed = playerSet.WalkingStrafeSpeed;
-
-        if(isSprinting)
+        if (controller.isGrounded && verticalVelocity < 0f)
         {
-            verticalSpeed = playerSet.RunningFowardSpeed;
-            horizontalSpeed = playerSet.RunningStrafeSpeed;
-        }
-
-        if(!characterController.isGrounded)
-        {
-            playerSet.SpeedEffector = playerSet.FallingSpeedEffector;
-        }
-        else if(playerStance == PlayerStance.Crouching)
-        {
-            playerSet.SpeedEffector = playerSet.CrouchSpeedEffector;
-        }
-        else if (playerStance == PlayerStance.Prone)
-        {
-            playerSet.SpeedEffector = playerSet.ProneSpeedEffector;
+            verticalVelocity = -2f;
         }
         else
         {
-            playerSet.SpeedEffector = 1;
+            verticalVelocity += gravity * Time.deltaTime;
         }
 
-        verticalSpeed *= playerSet.SpeedEffector;
-        horizontalSpeed *= playerSet.SpeedEffector;
-
-
-
-        
-
-
-        newMovementSpeed = Vector3.SmoothDamp(newMovementSpeed,
-            new Vector3(horizontalSpeed * input_Movement.x * Time.deltaTime, 0, verticalSpeed * input_Movement.y * Time.deltaTime), 
-            ref newMovementSpeedVelocity, characterController.isGrounded ? playerSet.MovementSmoothing : playerSet.FallingSmoothing);
-
-        var MovementSpeed = transform.TransformDirection(newMovementSpeed);
-
-
-        if (playerGravity > gravityMin)
-        {
-            playerGravity -= gravityAmount * Time.deltaTime;
-        }
-
-        
-
-        if(playerGravity < -0.1f && characterController.isGrounded)
-        {
-            playerGravity = -0.1f;
-        }
-     
-
-        MovementSpeed.y += playerGravity;
-
-        MovementSpeed += jumpingForce * Time.deltaTime;
-
-
-
-
-
-        characterController.Move(MovementSpeed);
-
+        Vector3 finalMovement = moveVelocity + Vector3.up * verticalVelocity;
+        controller.Move(finalMovement * Time.deltaTime);
     }
 
-    private void CalculateJump()
+    public void SetControlMode(ControlMode newMode)
     {
-        jumpingForce = Vector3.SmoothDamp(jumpingForce,Vector3.zero, ref jumpingForceVelocity, playerSet.JumpingFalloff);
+        controlMode = newMode;
+        cameraModeController?.SetCameraMode(controlMode);
+        UpdateMeshVisibility(controlMode == ControlMode.FirstPersonView);
     }
 
-
-
-    private void CalculateStance()
+    private void UpdateMeshVisibility(bool isFirstPerson)
     {
-        var currentStance = PlayerStandStance;
-
-        if (playerStance == PlayerStance.Crouching)
+        if (firstPersonHiddenRenderers == null) return;
+        foreach (var r in firstPersonHiddenRenderers)
         {
-            currentStance = PlayerCrouchStance;
+            if (r != null)
+                r.shadowCastingMode = isFirstPerson ? UnityEngine.Rendering.ShadowCastingMode.ShadowsOnly : UnityEngine.Rendering.ShadowCastingMode.On;
         }
-        else if(playerStance == PlayerStance.Prone)
-        {
-            currentStance = PlayerProneStance;
-        }
-
-
-        cameraHeight = Mathf.SmoothDamp(camHolder.localPosition.y, currentStance.CameraHeight, ref cameraHeightVelocity, playerStanceSmoothing);
-
-        camHolder.localPosition = new Vector3(camHolder.localPosition.x, cameraHeight, camHolder.localPosition.z);
-
-
-        characterController.height = Mathf.SmoothDamp(characterController.height, currentStance.StanceCollider.height,ref stanceCapsuleHeightVelocity, playerStanceSmoothing);
-        characterController.center = Vector3.SmoothDamp(characterController.center, currentStance.StanceCollider.center,ref stanceCapsuleCenterVelocity, playerStanceSmoothing);
-
-
-
-
     }
-
-
-
-
-    private void Jump()
-    {
-        if(!characterController.isGrounded || playerStance == PlayerStance.Prone)
-        {
-            return;
-        }
-
-        if(playerStance == PlayerStance.Crouching)
-        {
-            if (StandCheack(PlayerStandStance.StanceCollider.height))
-            {
-                return;
-            }
-
-
-            playerStance = PlayerStance.Standing;
-            return;
-        }
-
-
-
-        jumpingForce = Vector3.up * playerSet.JumpingHeight;
-        playerGravity = 0;
-
-    }
-
-
-    private void Crouch()
-    {
-        if(playerStance ==  PlayerStance.Crouching)
-        {
-            if (StandCheack(PlayerStandStance.StanceCollider.height))
-            {
-                return;
-            }
-
-
-
-            playerStance = PlayerStance.Standing;
-            return;
-        }
-
-        if (StandCheack(PlayerCrouchStance.StanceCollider.height))
-        {
-            return;
-        }
-
-
-        playerStance = PlayerStance.Crouching;
-    }
-
-
-    private void Prone()
-    {
-        playerStance = PlayerStance.Prone;
-    }
-
-    private bool StandCheack(float stanceCheckheight)
-    {
-        var start = new Vector3(feetTransfrom.position.x,feetTransfrom.position.y + characterController.radius + stanceCheckForError, feetTransfrom.position.z);
-        var end = new Vector3(feetTransfrom.position.x, feetTransfrom.position.y - characterController.radius - stanceCheckForError + stanceCheckheight, feetTransfrom.position.z);
-
-
-
-
-
-        return Physics.CheckCapsule(start,end,characterController.radius, playerMask);
-    }
-
-    private void ToggleSprint()
-    {
-        if (input_Movement.y <= 0.2f)
-        {
-            isSprinting = false;
-            return;
-        }
-
-
-
-
-
-        isSprinting = !isSprinting;
-    }
-
-    private void StopSprint()
-    {
-        if(playerSet.SprintingHold)
-        {
-            isSprinting = false;
-        }
-
-
-
-    }
-
-
-
 }
