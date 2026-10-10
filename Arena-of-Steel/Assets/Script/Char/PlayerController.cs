@@ -1,23 +1,9 @@
 using UnityEngine;
 
-public enum ControlMode
-{
-    FirstPersonView,
-    ThirdPersonView,
-}
-
 public class PlayerController : MonoBehaviour
 {
+    [SerializeField] private CameraController cameraController;
     [SerializeField] private Renderer[] firstPersonHiddenRenderers;
-    private CameraModeController cameraModeController;
-
-    [Header("카메라 설정")]
-    [SerializeField] private ControlMode controlMode = ControlMode.FirstPersonView;
-    [SerializeField] private Transform cameraTarget;
-    [SerializeField] private float topClamp = 70f;
-    [SerializeField] private float bottomClamp = -70f;
-    private float cameraYaw;
-    private float cameraPitch;
 
     [Header("이동 설정")]
     [SerializeField] private float walkSpeed = 3f;
@@ -44,26 +30,30 @@ public class PlayerController : MonoBehaviour
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
-        cameraYaw = transform.eulerAngles.y;
-        cameraPitch = 0f;
-
-        cameraModeController = GetComponent<CameraModeController>();
-        cameraModeController?.BindTrackingTarget(cameraTarget);
+        if (cameraController == null)
+            cameraController = GetComponent<CameraController>();
+        if (cameraController == null)
+            cameraController = FindAnyObjectByType<CameraController>();
     }
 
     private void Start()
     {
-        SetControlMode(controlMode);
+        if (cameraController != null)
+            UpdateMeshVisibility(cameraController.Mode);
     }
 
     private void OnEnable()
     {
         inputActions?.Player.Enable();
+        if (cameraController != null)
+            cameraController.OnModeChanged += UpdateMeshVisibility;
     }
 
     private void OnDisable()
     {
         inputActions?.Disable();
+        if (cameraController != null)
+            cameraController.OnModeChanged -= UpdateMeshVisibility;
     }
 
     private void OnDestroy()
@@ -80,37 +70,12 @@ public class PlayerController : MonoBehaviour
     {
         if (inputActions != null && inputActions.Player.ToggleView.WasPressedThisFrame())
         {
-            SetControlMode(controlMode == ControlMode.FirstPersonView ? ControlMode.ThirdPersonView : ControlMode.FirstPersonView);
+            cameraController?.ToggleView();
         }
 
-        HandleLook();
         HandleMovement();
         HandleJump();
         ApplyGravity();
-    }
-
-    private void HandleLook()
-    {
-        if (inputActions == null || cameraTarget == null) return;
-
-        Vector2 lookInput = inputActions.Player.Look.ReadValue<Vector2>();
-        float sens = CameraSensitivity.Instance != null ? CameraSensitivity.Instance.Sensitivity : 1f;
-        bool invertY = CameraSensitivity.Instance != null && CameraSensitivity.Instance.InvertY;
-
-        float deltaMultiplier = 0.1f * sens;
-        cameraYaw += lookInput.x * deltaMultiplier;
-        cameraPitch += (invertY ? lookInput.y : -lookInput.y) * deltaMultiplier;
-        cameraPitch = Mathf.Clamp(cameraPitch, bottomClamp, topClamp);
-
-        if (controlMode == ControlMode.FirstPersonView)
-        {
-            transform.rotation = Quaternion.Euler(0f, cameraYaw, 0f);
-            cameraTarget.localRotation = Quaternion.Euler(cameraPitch, 0f, 0f);
-        }
-        else
-        {
-            cameraTarget.rotation = Quaternion.Euler(cameraPitch, cameraYaw, 0f);
-        }
     }
 
     private void HandleMovement()
@@ -121,12 +86,12 @@ public class PlayerController : MonoBehaviour
         bool isRunning = inputActions.Player.Sprint.IsPressed();
         float currentSpeed = isRunning ? runSpeed : walkSpeed;
 
-        Transform camRef = cameraTarget != null ? cameraTarget : transform;
-        Vector3 camForward = Vector3.ProjectOnPlane(camRef.forward, Vector3.up).normalized;
-        Vector3 camRight = Vector3.ProjectOnPlane(camRef.right, Vector3.up).normalized;
+        Vector3 camForward = cameraController != null ? cameraController.PlanarForward : transform.forward;
+        Vector3 camRight = cameraController != null ? cameraController.PlanarRight : transform.right;
         Vector3 moveDirection = camForward * input.y + camRight * input.x;
 
-        if (controlMode == ControlMode.ThirdPersonView && moveDirection.sqrMagnitude > 0.001f)
+        bool isThirdPerson = (cameraController == null || cameraController.Mode == ControlMode.ThirdPersonView);
+        if (isThirdPerson && moveDirection.sqrMagnitude > 0.001f)
         {
             Quaternion targetRotation = Quaternion.LookRotation(moveDirection);
             transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, rotationSpeed * Time.deltaTime);
@@ -162,16 +127,10 @@ public class PlayerController : MonoBehaviour
         controller.Move(finalMovement * Time.deltaTime);
     }
 
-    public void SetControlMode(ControlMode newMode)
-    {
-        controlMode = newMode;
-        cameraModeController?.SetCameraMode(controlMode);
-        UpdateMeshVisibility(controlMode == ControlMode.FirstPersonView);
-    }
-
-    private void UpdateMeshVisibility(bool isFirstPerson)
+    private void UpdateMeshVisibility(ControlMode mode)
     {
         if (firstPersonHiddenRenderers == null) return;
+        bool isFirstPerson = (mode == ControlMode.FirstPersonView);
         foreach (var r in firstPersonHiddenRenderers)
         {
             if (r != null)
