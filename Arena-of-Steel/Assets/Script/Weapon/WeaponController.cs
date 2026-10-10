@@ -1,82 +1,44 @@
 using System.Collections;
 using UnityEngine;
-using static PlayerModel;
 
 
 
 public class WeaponController : MonoBehaviour
 {
-    /*private PlayerController characterController;
-
-
-    [Header("����")]
-    public WeaponSettingsModel WeaponSet;
-
-    bool isInitialised;
-
-    Vector3 newWeaponRotation;
-    Vector3 newWeaponRotationVelocity;
-
-    Vector3 targetWeaponRotation;
-    Vector3 targetWeaponRotationVelocity;
-
+    public GunSO GunSO;
+    /*
     public float reloadTime = 1f;
     public float fireRate = 0.15f;
     public int magsize = 30;
 
-    public GameObject bullet;
+    public GameObject bullet;*/
     public Transform bulletSpawnPoint;
 
-    public GameObject weaponFlash;
+    public Animator anime;
+    public Animator WepAnime;
+
+    [SerializeField] private Recoil Recoil;
 
     private int currentAmmo;
     private bool isReloadng = false;
     private float nextTimeToFire = 0f;
 
+    private bool isAiming;
 
-    public Animator anime;
-    public Animator WepAnime;
 
 
 
     private void Start()
     {
-        newWeaponRotation = transform.localRotation.eulerAngles;
+        Recoil = FindAnyObjectByType<Recoil>();
 
+        currentAmmo = GunSO.magsize;
 
-        currentAmmo = magsize;
-
-    }
-
-
-    public void Initialise(PlayerController CharacterController)
-    {
-        characterController = CharacterController;
-        isInitialised = true;
     }
 
 
     private void Update()
     {
-        if (!isInitialised)
-        {
-            return;
-        }
-
-        targetWeaponRotation.y += WeaponSet.SwayAmount * characterController.input_View.x * Time.deltaTime;
-        targetWeaponRotation.x += WeaponSet.SwayAmount * characterController.input_View.y * Time.deltaTime;
-
-        targetWeaponRotation.x = Mathf.Clamp(targetWeaponRotation.x, -WeaponSet.SwayClampX, WeaponSet.SwayClampX);
-        targetWeaponRotation.x = Mathf.Clamp(targetWeaponRotation.y, -WeaponSet.SwayClampY, WeaponSet.SwayClampY);
-
-        targetWeaponRotation = Vector3.SmoothDamp(targetWeaponRotation, Vector3.zero, ref targetWeaponRotationVelocity, WeaponSet.SwayResetSmoothing);
-
-        newWeaponRotation = Vector3.SmoothDamp(newWeaponRotation, targetWeaponRotation, ref newWeaponRotationVelocity, WeaponSet.SwaySmoothing);
-
-
-        transform.localRotation = Quaternion.Euler(newWeaponRotation);
-
-
 
     }
 
@@ -98,16 +60,20 @@ public class WeaponController : MonoBehaviour
             StartCoroutine(Reload());
         }
 
-        nextTimeToFire = Time.time + fireRate;
+        if(Recoil != null)
+        {
+            float recoilMult = isAiming ? 0.6f : 1f;
+            Recoil.AddRecoil(recoilMult);
+        }
+
+        nextTimeToFire = Time.time + GunSO.fireRate;
         currentAmmo--;
 
         anime.SetTrigger("Shooting");
         WepAnime.SetTrigger("Shooting");
 
-        anime.SetBool("isWalk", false);
-
-        Instantiate(bullet, bulletSpawnPoint.position, bulletSpawnPoint.rotation);
-        Instantiate(weaponFlash, bulletSpawnPoint.position, bulletSpawnPoint.rotation);
+        Instantiate(GunSO.bullet, bulletSpawnPoint.position, bulletSpawnPoint.rotation);
+        Instantiate(GunSO.weaponFlash, bulletSpawnPoint.position, bulletSpawnPoint.rotation);
 
     }
 
@@ -116,7 +82,7 @@ public class WeaponController : MonoBehaviour
     {
         isReloadng = true;
 
-        float halfReload = reloadTime / 2f;
+        float halfReload = GunSO.reloadTime / 2f;
         float t = 0f;
 
         anime.SetTrigger("Reload");
@@ -140,7 +106,7 @@ public class WeaponController : MonoBehaviour
         
 
 
-        currentAmmo = magsize;
+        currentAmmo = GunSO.magsize;
         isReloadng = false;
 
     }
@@ -151,12 +117,12 @@ public class WeaponController : MonoBehaviour
         {
             return;
         }
-        if(currentAmmo == magsize)
+        if(currentAmmo == GunSO.magsize)
         {
             return ;
         }
 
 
         StartCoroutine(Reload());
-    }*/
+    }
 }

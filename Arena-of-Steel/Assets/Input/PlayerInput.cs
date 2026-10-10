@@ -148,7 +148,7 @@ public partial class @PlayerInput: IInputActionCollection2, IDisposable
                     ""id"": ""fea48e84-b579-4a9f-8101-9cb58f7e26c9"",
                     ""expectedControlType"": """",
                     ""processors"": """",
-                    ""interactions"": """",
+                    ""interactions"": ""Press"",
                     ""initialStateCheck"": false,
                     ""priority"": 0
                 },
@@ -158,7 +158,7 @@ public partial class @PlayerInput: IInputActionCollection2, IDisposable
                     ""id"": ""4de302a5-357d-44c0-916f-8d68d484d812"",
                     ""expectedControlType"": """",
                     ""processors"": """",
-                    ""interactions"": """",
+                    ""interactions"": ""Press(behavior=1)"",
                     ""initialStateCheck"": false,
                     ""priority"": 0
                 },
@@ -168,7 +168,7 @@ public partial class @PlayerInput: IInputActionCollection2, IDisposable
                     ""id"": ""e952cda2-512a-433c-8edd-f8d92088930b"",
                     ""expectedControlType"": """",
                     ""processors"": """",
-                    ""interactions"": """",
+                    ""interactions"": ""Press"",
                     ""initialStateCheck"": false,
                     ""priority"": 0
                 },
@@ -178,7 +178,7 @@ public partial class @PlayerInput: IInputActionCollection2, IDisposable
                     ""id"": ""439f14df-fb65-483b-a9e3-23fb059c6ab8"",
                     ""expectedControlType"": """",
                     ""processors"": """",
-                    ""interactions"": """",
+                    ""interactions"": ""Press(behavior=1)"",
                     ""initialStateCheck"": false,
                     ""priority"": 0
                 },
