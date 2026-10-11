@@ -19,11 +19,11 @@ public class WeaponController : MonoBehaviour
 
     [SerializeField] private Recoil Recoil;
 
+    public bool isReloadng = false;
     private int currentAmmo;
-    private bool isReloadng = false;
     private float nextTimeToFire = 0f;
 
-    private bool isAiming;
+    private bool isAiming = false;
 
 
 
@@ -42,6 +42,10 @@ public class WeaponController : MonoBehaviour
 
     }
 
+    public void isAim()
+    {
+        isAiming = !isAiming;
+    }
 
     public void Shoot()
     {
@@ -55,12 +59,17 @@ public class WeaponController : MonoBehaviour
             return;
         }
 
-        if (currentAmmo <= 0)
+        if (currentAmmo <= 0 && isAiming == false)
         {
             StartCoroutine(Reload());
         }
 
-        if(Recoil != null)
+        if (currentAmmo <= 0)
+        {
+            return;
+        }
+
+        if (Recoil != null)
         {
             float recoilMult = isAiming ? 0.6f : 1f;
             Recoil.AddRecoil(recoilMult);

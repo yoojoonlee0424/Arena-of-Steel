@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem.XR;
 
+
 public class AnimationController : MonoBehaviour
 {
     private CharacterController controller;
@@ -29,5 +30,8 @@ public class AnimationController : MonoBehaviour
         }
         
     }
+
+
+
 
 }

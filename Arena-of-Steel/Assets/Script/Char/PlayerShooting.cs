@@ -1,20 +1,29 @@
 using UnityEngine;
+using UnityEngine.Animations.Rigging;
 using UnityEngine.InputSystem;
+using UnityEngine.Rendering;
 
 
 public class PlayerShooting : MonoBehaviour
 {
+    [SerializeField] private Rig Rig;
+
     public WeaponController Gun;
+    public Aiming Aiming;
     public bool isHoldingShoot = false;
 
     private PlayerInput defaultInput;
 
     private bool isSprint = false;
+    private bool isAim = false;
+
 
 
     private void Awake()
     {
-        defaultInput = new PlayerInput();
+
+
+        //defaultInput = new PlayerInput();
 
         /*defaultInput.OnFoot.Shoot.performed += e => OnShoot();
         defaultInput.OnFoot.ShootRelease.performed += e => OnShootRelease();
@@ -26,17 +35,14 @@ public class PlayerShooting : MonoBehaviour
 
         defaultInput.Enable();*/
 
-
-
+        Aiming = GetComponent<Aiming>();
+        
     }
 
     void OnShoot()
     {
         if (isSprint)
             return;
-
-
-
 
         isHoldingShoot=true;
         
@@ -55,6 +61,9 @@ public class PlayerShooting : MonoBehaviour
         if(isSprint)
             return ;
 
+        if (isAim)
+            return;
+
         if(Gun != null)
         {
             Gun.TryReload();
@@ -62,12 +71,23 @@ public class PlayerShooting : MonoBehaviour
         }
     }
 
+    void OnAim()
+    {
+        if(Gun.isReloadng) return;
+        if(isSprint) return;
+
+        Aiming.UpdateAiming();
+        isAim = !isAim;
+        Gun.isAim();
+    }
+
+    //단순 확인용
     void OnSprint()
     {
         isSprint = true;
     }
 
-    public void OnSprintReleased()
+    void OnSprintReleased()
     {
         isSprint = false;
     }
@@ -80,7 +100,19 @@ public class PlayerShooting : MonoBehaviour
             Gun.Shoot();
         }
 
+        if (isAim && isSprint)
+        {
+            Aiming.UpdateAiming();
+            isAim = false;
+        }
 
-
+        if (Gun.isReloadng)
+        {
+            Rig.weight = 0;
+        }
+        else
+        {
+            Rig.weight = 1; 
+        }
     }
 }
