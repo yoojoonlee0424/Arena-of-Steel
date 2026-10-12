@@ -16,17 +16,31 @@ public class PlayerController : MonoBehaviour
     [Header("바닥 설정")]
     [SerializeField] private float gravity = -20f;
 
+    [Header("대시 설정")]
+    [SerializeField] private float dashSpeed = 16f;
+    [SerializeField] private float dashDuration = 0.2f;
+    [SerializeField] private float dashCooldown = 0.8f;
+    [SerializeField] private float dashManaCost = 20f;
+    [SerializeField] private int maxAirDashes = 1;
+
     private Vector2 input;
     private CharacterController controller;
     private InputSystem_Actions inputActions;
+    private PlayerMana playerMana;
     private Vector3 moveVelocity;
     private float verticalVelocity;
+    private bool isDashing;
+    private float dashTimer;
+    private float dashCooldownTimer;
+    private int currentAirDashes;
+    private Vector3 dashDirection;
 
     public InputSystem_Actions InputActions => inputActions;
 
     private void Awake()
     {
         controller = GetComponent<CharacterController>();
+        playerMana = GetComponent<PlayerMana>();
         inputActions = new InputSystem_Actions();
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
@@ -47,6 +61,8 @@ public class PlayerController : MonoBehaviour
     private void OnEnable()
     {
         inputActions?.Player.Enable();
+        if (inputActions != null)
+            inputActions.Player.Dash.performed += OnDashPerformed;
         if (cameraController != null)
             cameraController.OnModeChanged += UpdateMeshVisibility;
         if (SettingManager.Instance != null)
@@ -55,6 +71,8 @@ public class PlayerController : MonoBehaviour
 
     private void OnDisable()
     {
+        if (inputActions != null)
+            inputActions.Player.Dash.performed -= OnDashPerformed;
         inputActions?.Disable();
         if (cameraController != null)
             cameraController.OnModeChanged -= UpdateMeshVisibility;
@@ -77,6 +95,7 @@ public class PlayerController : MonoBehaviour
         {
             inputActions?.Player.Disable();
             moveVelocity = Vector3.zero;
+            isDashing = false;
         }
     }
 
@@ -92,6 +111,15 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
+        if (dashCooldownTimer > 0f) dashCooldownTimer -= Time.deltaTime;
+        if (controller != null && controller.isGrounded) currentAirDashes = 0;
+
+        if (isDashing)
+        {
+            dashTimer -= Time.deltaTime;
+            if (dashTimer <= 0f) isDashing = false;
+        }
+
         if (inputActions != null && inputActions.Player.ToggleView.WasPressedThisFrame())
         {
             cameraController?.ToggleView();
@@ -104,6 +132,12 @@ public class PlayerController : MonoBehaviour
 
     private void HandleMovement()
     {
+        if (isDashing)
+        {
+            moveVelocity = dashDirection * dashSpeed;
+            return;
+        }
+
         input = inputActions.Player.Move.ReadValue<Vector2>();
         input = Vector2.ClampMagnitude(input, 1f);
 
@@ -126,7 +160,7 @@ public class PlayerController : MonoBehaviour
 
     private void HandleJump()
     {
-        if (controller == null || !controller.enabled) return;
+        if (controller == null || !controller.enabled || isDashing) return;
 
         if (inputActions.Player.Jump.WasPressedThisFrame() && controller.isGrounded)
         {
@@ -137,6 +171,13 @@ public class PlayerController : MonoBehaviour
     private void ApplyGravity()
     {
         if (controller == null || !controller.enabled) return;
+
+        if (isDashing)
+        {
+            verticalVelocity = 0f;
+            controller.Move(moveVelocity * Time.deltaTime);
+            return;
+        }
 
         if (controller.isGrounded && verticalVelocity < 0f)
         {
@@ -149,6 +190,42 @@ public class PlayerController : MonoBehaviour
 
         Vector3 finalMovement = moveVelocity + Vector3.up * verticalVelocity;
         controller.Move(finalMovement * Time.deltaTime);
+    }
+
+    private void OnDashPerformed(UnityEngine.InputSystem.InputAction.CallbackContext _)
+    {
+        if (isDashing || dashCooldownTimer > 0f) return;
+        if (controller != null && !controller.isGrounded && maxAirDashes > 0 && currentAirDashes >= maxAirDashes) return;
+        if (playerMana != null && !playerMana.UseMana(dashManaCost)) return;
+
+        Vector3 camForward = cameraController != null ? cameraController.PlanarForward : transform.forward;
+        Vector3 camRight = cameraController != null ? cameraController.PlanarRight : transform.right;
+
+        Vector2 moveInput = inputActions != null ? inputActions.Player.Move.ReadValue<Vector2>() : Vector2.zero;
+        if (moveInput.sqrMagnitude > 0.001f)
+        {
+            dashDirection = (camForward * moveInput.y + camRight * moveInput.x).normalized;
+        }
+        else
+        {
+            dashDirection = camForward.sqrMagnitude > 0.001f ? camForward.normalized : transform.forward;
+        }
+
+        bool isThirdPerson = (cameraController == null || cameraController.Mode == ControlMode.ThirdPersonView);
+        if (isThirdPerson && dashDirection.sqrMagnitude > 0.001f)
+        {
+            transform.rotation = Quaternion.LookRotation(dashDirection);
+        }
+
+        isDashing = true;
+        dashTimer = dashDuration;
+        dashCooldownTimer = dashCooldown;
+        verticalVelocity = 0f;
+
+        if (controller != null && !controller.isGrounded)
+        {
+            currentAirDashes++;
+        }
     }
 
     private void UpdateMeshVisibility(ControlMode mode)
