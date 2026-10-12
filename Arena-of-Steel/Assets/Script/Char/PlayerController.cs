@@ -29,7 +29,7 @@ public class PlayerController : MonoBehaviour
     private PlayerMana playerMana;
     private Vector3 moveVelocity;
     private float verticalVelocity;
-    private bool isDashing;
+    public bool isDashing { get; private set; }
     private float dashTimer;
     private float dashCooldownTimer;
     private int currentAirDashes;

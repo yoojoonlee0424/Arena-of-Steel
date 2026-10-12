@@ -5,6 +5,7 @@ using UnityEngine.InputSystem.XR;
 public class AnimationController : MonoBehaviour
 {
     private CharacterController controller;
+    private PlayerController playerController;
 
     private float horizontalSpeed;
 
@@ -14,13 +15,14 @@ public class AnimationController : MonoBehaviour
     void Start()
     {
         controller = GetComponent<CharacterController>();
+        playerController = GetComponent<PlayerController>();
     }
 
     // Update is called once per frame
     void Update()
     {
 
-        if (controller != null)
+        if (controller != null && playerController.isDashing == false)
         {
             Vector3 horizontalVelocity = new Vector3(controller.velocity.x, 0, controller.velocity.z);
             horizontalSpeed = horizontalVelocity.magnitude;
