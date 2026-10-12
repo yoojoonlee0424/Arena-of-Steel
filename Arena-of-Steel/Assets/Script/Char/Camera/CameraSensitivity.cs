@@ -24,4 +24,19 @@ public class CameraSensitivity : MonoBehaviour
     {
         Instance = this;
     }
+
+    private void Start()
+    {
+        if (SettingManager.Instance != null && SettingManager.Instance.CurrentSettings != null)
+        {
+            var s = SettingManager.Instance.CurrentSettings;
+            SetSensitivity(s.mouseSensitivity, s.invertY);
+        }
+    }
+
+    public void SetSensitivity(float sensitivity, bool invertY)
+    {
+        Sensitivity = sensitivity;
+        InvertY = invertY;
+    }
 }

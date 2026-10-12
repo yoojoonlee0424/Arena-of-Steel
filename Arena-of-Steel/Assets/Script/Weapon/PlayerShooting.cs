@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.Animations.Rigging;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
@@ -17,7 +17,6 @@ public class PlayerShooting : MonoBehaviour
     public Aiming Aiming2;
     public bool isHoldingShoot = false;
 
-    private PlayerInput defaultInput;
 
     private bool isSprint = false;
     private bool isAim = false;
@@ -28,19 +27,8 @@ public class PlayerShooting : MonoBehaviour
     {
 
 
-        //defaultInput = new PlayerInput();
 
-        /*defaultInput.OnFoot.Shoot.performed += e => OnShoot();
-        defaultInput.OnFoot.ShootRelease.performed += e => OnShootRelease();
 
-        defaultInput.OnFoot.Reload.performed += e => OnReload();
-
-        defaultInput.OnFoot.Sprint.performed += e => OnSprint();
-        defaultInput.OnFoot.SprintReleased.performed += e => OnSprintReleased();
-
-        defaultInput.Enable();*/
-
-        //Aiming = GetComponent<Aiming>();
         
     }
 
@@ -95,7 +83,7 @@ public class PlayerShooting : MonoBehaviour
         Gun2.isAim();
     }
 
-    //´Ü¼ø È®ÀÎ¿ë
+    //ï¿½Ü¼ï¿½ È®ï¿½Î¿ï¿½
     void OnSprint()
     {
         isSprint = true;

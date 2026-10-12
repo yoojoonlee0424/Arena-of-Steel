@@ -16,6 +16,7 @@ public class PlayerController : MonoBehaviour
     [Header("바닥 설정")]
     [SerializeField] private float gravity = -20f;
 
+    private Vector2 input;
     private CharacterController controller;
     private InputSystem_Actions inputActions;
     private Vector3 moveVelocity;
@@ -38,6 +39,7 @@ public class PlayerController : MonoBehaviour
 
     private void Start()
     {
+        SettingManager.Instance?.ApplyBindings(inputActions.asset);
         if (cameraController != null)
             UpdateMeshVisibility(cameraController.Mode);
     }
@@ -47,6 +49,8 @@ public class PlayerController : MonoBehaviour
         inputActions?.Player.Enable();
         if (cameraController != null)
             cameraController.OnModeChanged += UpdateMeshVisibility;
+        if (SettingManager.Instance != null)
+            SettingManager.Instance.OnBindingsChanged += OnBindingsChanged;
     }
 
     private void OnDisable()
@@ -54,6 +58,26 @@ public class PlayerController : MonoBehaviour
         inputActions?.Disable();
         if (cameraController != null)
             cameraController.OnModeChanged -= UpdateMeshVisibility;
+        if (SettingManager.Instance != null)
+            SettingManager.Instance.OnBindingsChanged -= OnBindingsChanged;
+    }
+
+    private void OnBindingsChanged()
+    {
+        SettingManager.Instance?.ApplyBindings(inputActions.asset);
+    }
+
+    public void SetInputActive(bool active)
+    {
+        if (active)
+        {
+            inputActions?.Player.Enable();
+        }
+        else
+        {
+            inputActions?.Player.Disable();
+            moveVelocity = Vector3.zero;
+        }
     }
 
     private void OnDestroy()
@@ -80,7 +104,7 @@ public class PlayerController : MonoBehaviour
 
     private void HandleMovement()
     {
-        Vector2 input = inputActions.Player.Move.ReadValue<Vector2>();
+        input = inputActions.Player.Move.ReadValue<Vector2>();
         input = Vector2.ClampMagnitude(input, 1f);
 
         bool isRunning = inputActions.Player.Sprint.IsPressed();

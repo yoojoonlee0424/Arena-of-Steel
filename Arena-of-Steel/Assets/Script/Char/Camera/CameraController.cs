@@ -61,8 +61,35 @@ public class CameraController : MonoBehaviour
         currentShoulderOffset = (controlMode == ControlMode.FirstPersonView) ? Vector3.zero : shoulderOffset;
     }
 
-    private void OnEnable() => inputActions?.Player.Enable();
-    private void OnDisable() => inputActions?.Disable();
+    private void Start()
+    {
+        SettingManager.Instance?.ApplyBindings(inputActions.asset);
+    }
+
+    private void OnEnable()
+    {
+        inputActions?.Player.Enable();
+        if (SettingManager.Instance != null)
+            SettingManager.Instance.OnBindingsChanged += OnBindingsChanged;
+    }
+
+    private void OnDisable()
+    {
+        inputActions?.Disable();
+        if (SettingManager.Instance != null)
+            SettingManager.Instance.OnBindingsChanged -= OnBindingsChanged;
+    }
+
+    private void OnBindingsChanged()
+    {
+        SettingManager.Instance?.ApplyBindings(inputActions.asset);
+    }
+
+    public void SetInputActive(bool active)
+    {
+        if (active) inputActions?.Player.Enable();
+        else inputActions?.Player.Disable();
+    }
 
     private void OnDestroy()
     {
