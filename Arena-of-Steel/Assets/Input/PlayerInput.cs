@@ -221,6 +221,26 @@ public partial class @PlayerInput: IInputActionCollection2, IDisposable
                     ""interactions"": """",
                     ""initialStateCheck"": false,
                     ""priority"": 0
+                },
+                {
+                    ""name"": ""Weapon1"",
+                    ""type"": ""Button"",
+                    ""id"": ""49114500-0285-46d6-a36e-6b4279c7eb57"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false,
+                    ""priority"": 0
+                },
+                {
+                    ""name"": ""Weapon2"",
+                    ""type"": ""Button"",
+                    ""id"": ""a45b68f0-581a-4c22-b5c7-e3c92f7be34c"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false,
+                    ""priority"": 0
                 }
             ],
             ""bindings"": [
@@ -421,6 +441,28 @@ public partial class @PlayerInput: IInputActionCollection2, IDisposable
                     ""action"": ""Escape"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""7a8aa9c9-0130-4bfb-8867-25e8b30808e6"",
+                    ""path"": ""<Keyboard>/1"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Weapon1"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""4e54652e-d288-4150-b381-2a6295b55b17"",
+                    ""path"": ""<Keyboard>/2"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""Weapon2"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
                 }
             ]
         }
@@ -442,6 +484,8 @@ public partial class @PlayerInput: IInputActionCollection2, IDisposable
         m_OnFoot_Aim = m_OnFoot.FindAction("Aim", throwIfNotFound: true);
         m_OnFoot_AimRelease = m_OnFoot.FindAction("AimRelease", throwIfNotFound: true);
         m_OnFoot_Escape = m_OnFoot.FindAction("Escape", throwIfNotFound: true);
+        m_OnFoot_Weapon1 = m_OnFoot.FindAction("Weapon1", throwIfNotFound: true);
+        m_OnFoot_Weapon2 = m_OnFoot.FindAction("Weapon2", throwIfNotFound: true);
     }
 
     ~@PlayerInput()
@@ -535,6 +579,8 @@ public partial class @PlayerInput: IInputActionCollection2, IDisposable
     private readonly InputAction m_OnFoot_Aim;
     private readonly InputAction m_OnFoot_AimRelease;
     private readonly InputAction m_OnFoot_Escape;
+    private readonly InputAction m_OnFoot_Weapon1;
+    private readonly InputAction m_OnFoot_Weapon2;
     /// <summary>
     /// Provides access to input actions defined in input action map "OnFoot".
     /// </summary>
@@ -598,6 +644,14 @@ public partial class @PlayerInput: IInputActionCollection2, IDisposable
         /// Provides access to the underlying input action "OnFoot/Escape".
         /// </summary>
         public InputAction @Escape => m_Wrapper.m_OnFoot_Escape;
+        /// <summary>
+        /// Provides access to the underlying input action "OnFoot/Weapon1".
+        /// </summary>
+        public InputAction @Weapon1 => m_Wrapper.m_OnFoot_Weapon1;
+        /// <summary>
+        /// Provides access to the underlying input action "OnFoot/Weapon2".
+        /// </summary>
+        public InputAction @Weapon2 => m_Wrapper.m_OnFoot_Weapon2;
         /// <summary>
         /// Provides access to the underlying input action map instance.
         /// </summary>
@@ -663,6 +717,12 @@ public partial class @PlayerInput: IInputActionCollection2, IDisposable
             @Escape.started += instance.OnEscape;
             @Escape.performed += instance.OnEscape;
             @Escape.canceled += instance.OnEscape;
+            @Weapon1.started += instance.OnWeapon1;
+            @Weapon1.performed += instance.OnWeapon1;
+            @Weapon1.canceled += instance.OnWeapon1;
+            @Weapon2.started += instance.OnWeapon2;
+            @Weapon2.performed += instance.OnWeapon2;
+            @Weapon2.canceled += instance.OnWeapon2;
         }
 
         /// <summary>
@@ -713,6 +773,12 @@ public partial class @PlayerInput: IInputActionCollection2, IDisposable
             @Escape.started -= instance.OnEscape;
             @Escape.performed -= instance.OnEscape;
             @Escape.canceled -= instance.OnEscape;
+            @Weapon1.started -= instance.OnWeapon1;
+            @Weapon1.performed -= instance.OnWeapon1;
+            @Weapon1.canceled -= instance.OnWeapon1;
+            @Weapon2.started -= instance.OnWeapon2;
+            @Weapon2.performed -= instance.OnWeapon2;
+            @Weapon2.canceled -= instance.OnWeapon2;
         }
 
         /// <summary>
@@ -844,5 +910,19 @@ public partial class @PlayerInput: IInputActionCollection2, IDisposable
         /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
         /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
         void OnEscape(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Weapon1" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnWeapon1(InputAction.CallbackContext context);
+        /// <summary>
+        /// Method invoked when associated input action "Weapon2" is either <see cref="UnityEngine.InputSystem.InputAction.started" />, <see cref="UnityEngine.InputSystem.InputAction.performed" /> or <see cref="UnityEngine.InputSystem.InputAction.canceled" />.
+        /// </summary>
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.started" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.performed" />
+        /// <seealso cref="UnityEngine.InputSystem.InputAction.canceled" />
+        void OnWeapon2(InputAction.CallbackContext context);
     }
 }

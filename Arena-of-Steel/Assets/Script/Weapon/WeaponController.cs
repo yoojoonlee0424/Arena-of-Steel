@@ -30,7 +30,7 @@ public class WeaponController : MonoBehaviour
 
     private void Start()
     {
-        Recoil = FindAnyObjectByType<Recoil>();
+        //Recoil = FindAnyObjectByType<Recoil>();
 
         currentAmmo = GunSO.magsize;
 

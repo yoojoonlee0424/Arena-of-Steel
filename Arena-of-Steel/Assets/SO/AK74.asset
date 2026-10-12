@@ -17,3 +17,8 @@ MonoBehaviour:
   magsize: 30
   bullet: {fileID: 6253391593911018001, guid: ebf6247860908d74eb68be8bf1ecd977, type: 3}
   weaponFlash: {fileID: 4377480359558679972, guid: 3e99e0019ecf0a94b904a37c633f1f1b, type: 3}
+  pitchKick: -3
+  yawKick: 0.8
+  yawRandomness: 1
+  returnStrength: 40
+  damping: 18
