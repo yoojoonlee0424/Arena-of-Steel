@@ -1,0 +1,32 @@
+# Blender 5.1.2 MTL File: 'AK12_anim.blend'
+# www.blender.org
+
+newmtl palette.004
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd D:/tool/MagicaVoxel-0.99.7.2-win64/export/AK12_2-0.png
+
+newmtl palette.005
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd D:/tool/MagicaVoxel-0.99.7.2-win64/export/AK12_2-1-Main.png
+
+newmtl palette.006
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd D:/tool/MagicaVoxel-0.99.7.2-win64/export/AK12_2-2-ak12rend.png
