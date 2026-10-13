@@ -12,15 +12,16 @@ public class SettingKeyRebindSlot : MonoBehaviour
     [SerializeField] private Button rebindButton;
 
     [Header("설정 정보")]
-    [Tooltip("액션 경로 (예: Player/Move)")]
-    [SerializeField] private string actionPath = "";
-    [Tooltip("컴포지트 파트 (예: up)")]
-    [SerializeField] private string compositePart = "";
-    [SerializeField] private string displayName = "";
+    [SerializeField] private InputActionReference actionReference;
+    [SerializeField] private string bindingId;
+    [SerializeField] private string displayName;
 
     private InputAction targetAction;
     private int bindingIndex = -1;
     private bool isRebinding;
+
+    public InputActionReference ActionReference => actionReference;
+    public string BindingId => bindingId;
 
     private void Awake()
     {
@@ -39,20 +40,22 @@ public class SettingKeyRebindSlot : MonoBehaviour
 
     public void Init(InputActionAsset asset)
     {
-        if (asset != null && !string.IsNullOrEmpty(actionPath))
+        if (actionReference != null && actionReference.action != null)
         {
-            targetAction = asset.FindAction(actionPath);
+            targetAction = asset != null ? asset.FindAction(actionReference.action.id) : actionReference.action;
         }
         else
         {
             targetAction = null;
         }
 
-        bindingIndex = FindBindingIndex(targetAction, compositePart);
+        bindingIndex = FindBindingIndex(targetAction, bindingId);
 
         if (actionNameText != null)
         {
-            actionNameText.text = displayName;
+            actionNameText.text = !string.IsNullOrEmpty(displayName)
+                ? displayName
+                : (targetAction != null ? targetAction.name : "");
         }
 
         RefreshDisplay();
@@ -112,50 +115,27 @@ public class SettingKeyRebindSlot : MonoBehaviour
 
         if (bindingIndex < 0 || bindingIndex >= targetAction.bindings.Count)
         {
-            bindingIndex = FindBindingIndex(targetAction, compositePart);
+            bindingIndex = FindBindingIndex(targetAction, bindingId);
         }
 
         return bindingIndex >= 0 && bindingIndex < targetAction.bindings.Count;
     }
 
-    private static int FindBindingIndex(InputAction action, string part)
+    private static int FindBindingIndex(InputAction action, string idString)
     {
-        if (action == null) return -1;
+        if (action == null || string.IsNullOrEmpty(idString)) return -1;
 
-        var bindings = action.bindings;
-        bool hasPart = !string.IsNullOrEmpty(part);
+        if (!Guid.TryParse(idString, out var targetId)) return -1;
 
-        if (hasPart)
+        for (int i = 0; i < action.bindings.Count; i++)
         {
-            for (int i = 0; i < bindings.Count; i++)
-            {
-                if (bindings[i].isPartOfComposite && bindings[i].name.Equals(part, StringComparison.OrdinalIgnoreCase))
-                {
-                    return i;
-                }
-            }
-            return -1;
-        }
-
-        int fallback = -1;
-        for (int i = 0; i < bindings.Count; i++)
-        {
-            var b = bindings[i];
-            if (b.isComposite || b.isPartOfComposite) continue;
-
-            if ((b.groups != null && b.groups.Contains("Keyboard")) ||
-                (b.effectivePath != null && b.effectivePath.Contains("Keyboard")))
+            if (action.bindings[i].id == targetId)
             {
                 return i;
             }
-
-            if (fallback < 0)
-            {
-                fallback = i;
-            }
         }
 
-        return fallback;
+        return -1;
     }
 
     private void AutoFind()

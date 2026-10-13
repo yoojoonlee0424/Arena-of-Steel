@@ -1,135 +1,147 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.Animations.Rigging;
 using UnityEngine.InputSystem;
-using UnityEngine.Rendering;
-
 
 public class PlayerShooting : MonoBehaviour
 {
     [SerializeField] private Rig Rig1;
     [SerializeField] private Rig Rig2;
-
     [SerializeField] private WeaponSwap WeaponSwap;
 
     public WeaponController Gun1;
     public WeaponController Gun2;
     public Aiming Aiming1;
     public Aiming Aiming2;
-    public bool isHoldingShoot = false;
+    public bool isHoldingShoot;
 
-
-    private bool isSprint = false;
-    private bool isAim = false;
-
-
+    private bool isSprint;
+    private bool isAim;
+    private InputSystem_Actions inputActions;
+    private bool ownsInputActions;
 
     private void Awake()
     {
+        if (WeaponSwap == null)
+            WeaponSwap = GetComponent<WeaponSwap>();
 
-
-
-
-        
+        var pc = GetComponent<PlayerController>();
+        if (pc != null)
+        {
+            inputActions = pc.InputActions;
+        }
+        else
+        {
+            inputActions = new InputSystem_Actions();
+            inputActions.Player.Enable();
+            ownsInputActions = true;
+        }
     }
 
-    void OnShoot()
+    private void OnEnable()
     {
-        if (isSprint)
-            return;
-
-        isHoldingShoot=true;
-        
+        if (inputActions == null) return;
+        inputActions.Player.Attack.started += OnAttackStarted;
+        inputActions.Player.Attack.canceled += OnAttackCanceled;
+        inputActions.Player.Reload.performed += OnReloadPerformed;
+        inputActions.Player.Aim.performed += OnAimPerformed;
+        inputActions.Player.Sprint.started += OnSprintStarted;
+        inputActions.Player.Sprint.canceled += OnSprintCanceled;
     }
 
-    void OnShootRelease()
+    private void OnDisable()
     {
-        if(isSprint)
-            return ;
-
+        if (inputActions == null) return;
+        inputActions.Player.Attack.started -= OnAttackStarted;
+        inputActions.Player.Attack.canceled -= OnAttackCanceled;
+        inputActions.Player.Reload.performed -= OnReloadPerformed;
+        inputActions.Player.Aim.performed -= OnAimPerformed;
+        inputActions.Player.Sprint.started -= OnSprintStarted;
+        inputActions.Player.Sprint.canceled -= OnSprintCanceled;
         isHoldingShoot = false;
     }
 
-    void OnReload()
+    private void OnDestroy()
     {
-        if(isSprint)
-            return ;
-
-        if (isAim)
-            return;
-
-        if(Gun1 != null && WeaponSwap.isMain == true)
+        if (ownsInputActions && inputActions != null)
         {
+            inputActions.Disable();
+            inputActions.Dispose();
+            inputActions = null;
+        }
+    }
+
+    private void OnAttackStarted(InputAction.CallbackContext _)
+    {
+        if (isSprint) return;
+        isHoldingShoot = true;
+    }
+
+    private void OnAttackCanceled(InputAction.CallbackContext _)
+    {
+        isHoldingShoot = false;
+    }
+
+    private void OnReloadPerformed(InputAction.CallbackContext _)
+    {
+        if (isSprint || isAim) return;
+
+        if (Gun1 != null && WeaponSwap != null && WeaponSwap.isMain)
             Gun1.TryReload();
-            
-        }
 
-        if (Gun2 != null && WeaponSwap.isMain == false)
-        {
+        if (Gun2 != null && WeaponSwap != null && !WeaponSwap.isMain)
             Gun2.TryReload();
-
-        }
     }
 
-    void OnAim()
+    private void OnAimPerformed(InputAction.CallbackContext _)
     {
-        if(Gun1.isReloadng) return;
-        if(Gun2.isReloadng) return;
-        if(isSprint) return;
+        if (Gun1 != null && Gun1.isReloadng) return;
+        if (Gun2 != null && Gun2.isReloadng) return;
+        if (isSprint) return;
 
-        Aiming1.UpdateAiming();
-        Aiming2.UpdateAiming();
+        if (Aiming1 != null) Aiming1.UpdateAiming();
+        if (Aiming2 != null) Aiming2.UpdateAiming();
         isAim = !isAim;
-        Gun1.isAim();
-        Gun2.isAim();
+        if (Gun1 != null) Gun1.isAim();
+        if (Gun2 != null) Gun2.isAim();
     }
 
-    //�ܼ� Ȯ�ο�
-    void OnSprint()
+    private void OnSprintStarted(InputAction.CallbackContext _)
     {
         isSprint = true;
     }
 
-    void OnSprintReleased()
+    private void OnSprintCanceled(InputAction.CallbackContext _)
     {
         isSprint = false;
     }
 
-    // Update is called once per frame
-    void Update()
+    private void Update()
     {
-        if (isHoldingShoot == true && Gun1 != null && WeaponSwap.isMain == true)
+        if (isHoldingShoot && Gun1 != null && WeaponSwap != null && WeaponSwap.isMain)
         {
             Gun1.Shoot();
         }
 
-        if (isHoldingShoot == true && Gun2 != null && WeaponSwap.isMain == false)
+        if (isHoldingShoot && Gun2 != null && WeaponSwap != null && !WeaponSwap.isMain)
         {
             Gun2.Shoot();
         }
 
         if (isAim && isSprint)
         {
-            Aiming1.UpdateAiming();
-            Aiming2.UpdateAiming();
+            if (Aiming1 != null) Aiming1.UpdateAiming();
+            if (Aiming2 != null) Aiming2.UpdateAiming();
             isAim = false;
         }
 
-        if (Gun1.isReloadng)
+        if (Rig1 != null && Gun1 != null)
         {
-            Rig1.weight = 0;
-        }
-        else
-        {
-            Rig1.weight = 1;
+            Rig1.weight = Gun1.isReloadng ? 0 : 1;
         }
 
-        if (Gun2.isReloadng)
+        if (Rig2 != null && Gun2 != null)
         {
-            Rig2.weight = 0;
-        }
-        else
-        {
-            Rig2.weight = 1;
+            Rig2.weight = Gun2.isReloadng ? 0 : 1;
         }
     }
 }

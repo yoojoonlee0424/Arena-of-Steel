@@ -35,13 +35,22 @@ public class PlayerController : MonoBehaviour
     private int currentAirDashes;
     private Vector3 dashDirection;
 
-    public InputSystem_Actions InputActions => inputActions;
+    public InputSystem_Actions InputActions
+    {
+        get
+        {
+            if (inputActions == null)
+                inputActions = new InputSystem_Actions();
+            return inputActions;
+        }
+    }
 
     private void Awake()
     {
         controller = GetComponent<CharacterController>();
         playerMana = GetComponent<PlayerMana>();
-        inputActions = new InputSystem_Actions();
+        if (inputActions == null)
+            inputActions = new InputSystem_Actions();
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
 
