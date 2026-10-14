@@ -17,7 +17,7 @@ public class MainMenuSettingsUI : MonoBehaviour
     [SerializeField] private Button closeButton;
     [SerializeField] private List<SettingTab> tabs = new();
 
-    private bool isInitialized;
+    private readonly HashSet<GameObject> initializedPanels = new();
     private int currentTabIndex = -1;
 
     public bool IsOpen => settingsRoot != null && settingsRoot.activeSelf;
@@ -41,32 +41,6 @@ public class MainMenuSettingsUI : MonoBehaviour
         }
     }
 
-    public void InitSections()
-    {
-        if (isInitialized) return;
-
-        SettingManager manager = SettingManager.Instance;
-        if (manager == null) return;
-
-        for (int i = 0; i < tabs.Count; i++)
-        {
-            if (tabs[i].panel != null) tabs[i].panel.SetActive(true);
-        }
-
-        SettingSection[] sections = GetComponentsInChildren<SettingSection>(true);
-        for (int i = 0; i < sections.Length; i++)
-        {
-            sections[i].Init(manager);
-        }
-
-        for (int i = 0; i < tabs.Count; i++)
-        {
-            if (tabs[i].panel != null) tabs[i].panel.SetActive(false);
-        }
-
-        isInitialized = true;
-    }
-
     public void Open()
     {
         if (settingsRoot != null)
@@ -74,7 +48,6 @@ public class MainMenuSettingsUI : MonoBehaviour
             settingsRoot.SetActive(true);
         }
 
-        InitSections();
         SwitchTab(0);
     }
 
@@ -106,10 +79,29 @@ public class MainMenuSettingsUI : MonoBehaviour
 
         for (int i = 0; i < tabs.Count; i++)
         {
-            if (tabs[i].panel != null)
+            GameObject panel = tabs[i].panel;
+            if (panel == null) continue;
+
+            bool isTarget = i == index;
+            panel.SetActive(isTarget);
+
+            if (isTarget && !initializedPanels.Contains(panel))
             {
-                tabs[i].panel.SetActive(i == index);
+                InitPanelSections(panel);
+                initializedPanels.Add(panel);
             }
+        }
+    }
+
+    private void InitPanelSections(GameObject panel)
+    {
+        SettingManager manager = SettingManager.Instance;
+        if (manager == null || panel == null) return;
+
+        SettingSection[] sections = panel.GetComponentsInChildren<SettingSection>(true);
+        for (int i = 0; i < sections.Length; i++)
+        {
+            sections[i].Init(manager);
         }
     }
 }

@@ -14,11 +14,13 @@ public class Bullet : MonoBehaviour
     public float fragmentLifetime = 6f;
 
     private Rigidbody rb;
+    private Collider bulletCollider;
     private bool hasHit = false;
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
+        bulletCollider = GetComponent<Collider>();
         if (rb != null)
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
         rb.linearVelocity = -transform.right * speed;
@@ -27,8 +29,35 @@ public class Bullet : MonoBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
-        Vector3 hitPoint = collision.contacts.Length > 0 ? collision.contacts[0].point : transform.position;
-        HandleHit(collision.gameObject, hitPoint);
+        if (hasHit) return;
+
+        Vector3 contactPoint = collision.contacts.Length > 0 ? collision.contacts[0].point : transform.position;
+
+        VoxVoxelObject vox = collision.gameObject.GetComponentInParent<VoxVoxelObject>();
+        if (vox != null)
+        {
+            if (vox.HasActiveVoxelNear(contactPoint, vox.VoxelSize * 1.5f, out Vector3 nearestVoxel))
+            {
+                HandleHit(collision.gameObject, nearestVoxel);
+                return;
+            }
+
+            Vector3 flightDir = -transform.right.normalized;
+            Ray ray = new Ray(transform.position - flightDir * 1.5f, flightDir);
+            if (vox.RaycastVoxel(ray, 4f, out Vector3 rayHit, out _))
+            {
+                HandleHit(collision.gameObject, rayHit);
+                return;
+            }
+
+            if (bulletCollider != null && collision.collider != null)
+            {
+                Physics.IgnoreCollision(bulletCollider, collision.collider, true);
+            }
+            return;
+        }
+
+        HandleHit(collision.gameObject, contactPoint);
     }
 
     private void HandleHit(GameObject hitObj, Vector3 hitPoint)

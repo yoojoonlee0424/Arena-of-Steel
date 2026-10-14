@@ -1,9 +1,18 @@
+using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 public class PlayerHealth : MonoBehaviour
 {
-    public int health = 100;
+    [SerializeField] private int maxHealth = 100;
+    [SerializeField] private int currentHealth;
+    public static event Action<float, float> OnHpChanged;
+
+    void Start()
+    {
+        currentHealth = maxHealth;
+        OnHpChanged?.Invoke(currentHealth, maxHealth);
+    }
 
     private void OnCollisionEnter(Collision collision)
     {
@@ -13,14 +22,13 @@ public class PlayerHealth : MonoBehaviour
         }
     }
 
-
     private void DecreaseHealth(int decreaseAmount)
     {
-        health -= decreaseAmount;
-
+        currentHealth -= decreaseAmount;
+        OnHpChanged?.Invoke(currentHealth, maxHealth);
         //Ui_hit.instance.InstantiateHitUi();
 
-        if(health <= 0)
+        if(currentHealth <= 0)
         {
             Die();
         }
@@ -31,5 +39,4 @@ public class PlayerHealth : MonoBehaviour
     {
         SceneManager.LoadSceneAsync(0);
     }
-
 }

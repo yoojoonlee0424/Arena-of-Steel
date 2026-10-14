@@ -69,6 +69,29 @@ namespace VoxelDestructionPro.Vox
         private static readonly List<GameObject> activeFragments = new List<GameObject>();
         private static ParticleSystem sharedParticleSystem;
         private static Mesh cachedCubeMesh;
+        private static readonly List<Collider> s_PlayerColliders = new List<Collider>();
+
+        public static void IgnorePlayerCollision(Collider col)
+        {
+            if (col == null) return;
+            if (s_PlayerColliders.Count == 0 || s_PlayerColliders[0] == null)
+            {
+                s_PlayerColliders.Clear();
+                var players = GameObject.FindGameObjectsWithTag("Player");
+                for (int i = 0; i < players.Length; i++)
+                {
+                    s_PlayerColliders.AddRange(players[i].GetComponentsInChildren<Collider>(true));
+                }
+            }
+
+            for (int i = 0; i < s_PlayerColliders.Count; i++)
+            {
+                if (s_PlayerColliders[i] != null && s_PlayerColliders[i].enabled)
+                {
+                    Physics.IgnoreCollision(col, s_PlayerColliders[i], true);
+                }
+            }
+        }
 
         public event Action<VoxelDamageResult> OnVoxelDamaged;
 
@@ -85,6 +108,7 @@ namespace VoxelDestructionPro.Vox
             bool isDynamic = TryGetComponent<Rigidbody>(out var rb) && !rb.isKinematic;
             meshCollider.enabled = true;
             meshCollider.convex = isDynamic;
+            if (isDynamic) IgnorePlayerCollision(meshCollider);
             EnsureMaterial();
         }
 
@@ -269,10 +293,135 @@ namespace VoxelDestructionPro.Vox
                 meshCollider.sharedMesh = null;
                 meshCollider.convex = true;
                 meshCollider.sharedMesh = meshFilter.sharedMesh;
+                IgnorePlayerCollision(meshCollider);
             }
             rb.isKinematic = false;
             rb.WakeUp();
             StartSettlingCheck();
+        }
+
+        /// <summary>
+        /// 지정한 월드 좌표 근처에 실제 활성화된 복셀이 존재하는지 검사합니다.
+        /// </summary>
+        public bool HasActiveVoxelNear(Vector3 worldPoint, float radius, out Vector3 nearestVoxelPos)
+        {
+            nearestVoxelPos = worldPoint;
+            if (voxelData == null || voxelData.IsEmpty()) return false;
+
+            float vSize = Mathf.Max(voxelSize, 0.0001f);
+            Vector3 local = transform.InverseTransformPoint(worldPoint) / vSize;
+
+            int cx = Mathf.RoundToInt(local.x);
+            int cy = Mathf.RoundToInt(local.y);
+            int cz = Mathf.RoundToInt(local.z);
+
+            int r = Mathf.CeilToInt(radius / vSize);
+            r = Mathf.Clamp(r, 1, 3);
+
+            float minDistSq = float.MaxValue;
+            bool found = false;
+            Vector3 bestLocal = local;
+
+            for (int z = cz - r; z <= cz + r; z++)
+            {
+                for (int y = cy - r; y <= cy + r; y++)
+                {
+                    for (int x = cx - r; x <= cx + r; x++)
+                    {
+                        if (!voxelData.InBounds(x, y, z)) continue;
+                        var v = voxelData.GetVoxel(x, y, z);
+                        if (v.active)
+                        {
+                            Vector3 voxCenter = new Vector3(x, y, z);
+                            float distSq = (voxCenter - local).sqrMagnitude;
+                            if (distSq < minDistSq)
+                            {
+                                minDistSq = distSq;
+                                bestLocal = voxCenter;
+                                found = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (found)
+            {
+                nearestVoxelPos = transform.TransformPoint(bestLocal * vSize);
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// 월드 레이가 실제 활성화된 복셀을 관통하는지 정밀 검사합니다.
+        /// </summary>
+        public bool RaycastVoxel(Ray worldRay, float maxDistance, out Vector3 hitPoint, out Vector3Int hitCoord)
+        {
+            hitPoint = Vector3.zero;
+            hitCoord = Vector3Int.zero;
+
+            if (voxelData == null || voxelData.IsEmpty()) return false;
+
+            float vSize = Mathf.Max(voxelSize, 0.0001f);
+            Vector3 localOrigin = transform.InverseTransformPoint(worldRay.origin);
+            Vector3 localDir = transform.InverseTransformDirection(worldRay.direction).normalized;
+
+            Vector3 gridOrigin = localOrigin / vSize;
+            Vector3 gridDir = localDir;
+
+            Vector3 boxMin = new Vector3(-0.5f, -0.5f, -0.5f);
+            Vector3 boxMax = (Vector3)voxelData.length - new Vector3(0.5f, 0.5f, 0.5f);
+
+            if (!IntersectAABB(gridOrigin, gridDir, boxMin, boxMax, out float tMin, out float tMax))
+                return false;
+
+            float startT = Mathf.Max(0f, tMin);
+            float endT = Mathf.Min(tMax, maxDistance / vSize);
+            if (startT > endT) return false;
+
+            float step = 0.35f;
+            for (float t = startT; t <= endT; t += step)
+            {
+                Vector3 p = gridOrigin + gridDir * t;
+                int x = Mathf.RoundToInt(p.x);
+                int y = Mathf.RoundToInt(p.y);
+                int z = Mathf.RoundToInt(p.z);
+
+                if (voxelData.InBounds(x, y, z))
+                {
+                    var vox = voxelData.GetVoxel(x, y, z);
+                    if (vox.active)
+                    {
+                        hitCoord = new Vector3Int(x, y, z);
+                        hitPoint = transform.TransformPoint(new Vector3(x, y, z) * vSize);
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool IntersectAABB(Vector3 rayOrigin, Vector3 rayDir, Vector3 boxMin, Vector3 boxMax, out float tMin, out float tMax)
+        {
+            tMin = float.MinValue;
+            tMax = float.MaxValue;
+
+            for (int i = 0; i < 3; i++)
+            {
+                float invD = 1f / (Mathf.Abs(rayDir[i]) > 1e-6f ? rayDir[i] : (rayDir[i] >= 0 ? 1e-6f : -1e-6f));
+                float t0 = (boxMin[i] - rayOrigin[i]) * invD;
+                float t1 = (boxMax[i] - rayOrigin[i]) * invD;
+                if (invD < 0f) { float tmp = t0; t0 = t1; t1 = tmp; }
+
+                tMin = Mathf.Max(tMin, t0);
+                tMax = Mathf.Min(tMax, t1);
+                if (tMax < tMin) return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -896,6 +1045,7 @@ namespace VoxelDestructionPro.Vox
 
             MeshCollider mc = go.AddComponent<MeshCollider>();
             mc.convex = true;
+            IgnorePlayerCollision(mc);
 
             VoxVoxelObject frag = go.AddComponent<VoxVoxelObject>();
             frag.isFragment = true;

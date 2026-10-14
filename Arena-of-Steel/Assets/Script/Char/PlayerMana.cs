@@ -17,11 +17,12 @@ public class PlayerMana : MonoBehaviour
     }
     public float MaxMana => maxMana;
 
-    public event Action<float, float> OnManaChanged;
+    public static event Action<float, float> OnMpChanged;
 
-    private void Awake()
+    private void Start()
     {
         currentMana = maxMana;
+        OnMpChanged?.Invoke(currentMana, maxMana);
     }
 
     private void Update()
@@ -29,7 +30,7 @@ public class PlayerMana : MonoBehaviour
         if (currentMana < maxMana && regenRate > 0f)
         {
             currentMana = Mathf.Min(maxMana, currentMana + regenRate * Time.deltaTime);
-            OnManaChanged?.Invoke(currentMana, maxMana);
+            OnMpChanged?.Invoke(currentMana, maxMana);
         }
     }
 
@@ -49,13 +50,13 @@ public class PlayerMana : MonoBehaviour
         if (CurrentMana < amount) return false;
 
         CurrentMana -= amount;
-        OnManaChanged?.Invoke(CurrentMana, maxMana);
+        OnMpChanged?.Invoke(CurrentMana, maxMana);
         return true;
     }
 
     public void RestoreMana(float amount)
     {
         CurrentMana = Mathf.Min(maxMana, CurrentMana + amount);
-        OnManaChanged?.Invoke(CurrentMana, maxMana);
+        OnMpChanged?.Invoke(CurrentMana, maxMana);
     }
 }
