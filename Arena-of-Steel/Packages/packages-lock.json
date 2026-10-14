@@ -1,5 +1,11 @@
 {
   "dependencies": {
+    "com.cqf.urpvolumetricfog": {
+      "version": "file:com.cqf.urpvolumetricfog",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {}
+    },
     "com.unity.ai.navigation": {
       "version": "2.0.14",
       "depth": 0,

@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.cqf.urpvolumetricfog": "file:D:/unity asset/Unity-URP-Volumetric-Light/Unity-URP-Volumetric-Light-main",
     "com.unity.ai.navigation": "2.0.14",
     "com.unity.animation.rigging": "1.4.1",
     "com.unity.cinemachine": "3.1.7",
