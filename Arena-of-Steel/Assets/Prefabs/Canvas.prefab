@@ -12309,7 +12309,7 @@ MonoBehaviour:
   rebindButton: {fileID: 6036029120890343350}
   actionReference: {fileID: -3554901576812914304, guid: 052faaac586de48259a63d0c4782560b, type: 3}
   bindingId: 1d4efd8f-f083-402a-9bda-84ea0574344b
-  displayName: Sprint
+  displayName: Dash
 --- !u!1 &4335200985942884830
 GameObject:
   m_ObjectHideFlags: 0

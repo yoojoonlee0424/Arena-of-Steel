@@ -11,6 +11,7 @@ public class MainMenuController : MonoBehaviour
     [SerializeField] private Button startButton;
     [SerializeField] private Button settingsButton;
     [SerializeField] private Button quitButton;
+    [SerializeField] private MainMenuSettingsUI settingsUI;
 
     [Header("씬 선택 패널")]
     [SerializeField] private GameObject sceneSelectPanel;
@@ -25,15 +26,19 @@ public class MainMenuController : MonoBehaviour
     {
         inputActions = new InputSystem_Actions();
         BindMainButtons();
-        InitSceneButtons();
     }
 
     private void Start()
     {
         UnlockCursor();
+        InitSceneButtons();
         if (sceneSelectPanel != null)
         {
             sceneSelectPanel.SetActive(false);
+        }
+        if (settingsUI != null && settingsUI.IsOpen)
+        {
+            settingsUI.Close();
         }
     }
 
@@ -119,7 +124,11 @@ public class MainMenuController : MonoBehaviour
     {
         AudioManager.Instance?.PlaySubmit();
 
-        if (SettingUIManager.Instance != null)
+        if (settingsUI != null)
+        {
+            settingsUI.Open();
+        }
+        else if (SettingUIManager.Instance != null)
         {
             SettingUIManager.Instance.Open();
         }
@@ -133,6 +142,12 @@ public class MainMenuController : MonoBehaviour
 
     private void OnBackPressed(InputAction.CallbackContext _)
     {
+        if (settingsUI != null && settingsUI.IsOpen)
+        {
+            settingsUI.Close();
+            return;
+        }
+
         if (SettingUIManager.Instance != null && SettingUIManager.Instance.IsOpen) return;
 
         if (sceneSelectPanel != null && sceneSelectPanel.activeSelf)
