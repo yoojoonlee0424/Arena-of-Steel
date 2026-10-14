@@ -18,7 +18,7 @@ public class PlayerHealth : MonoBehaviour
     {
         health -= decreaseAmount;
 
-        Ui_hit.instance.InstantiateHitUi();
+        //Ui_hit.instance.InstantiateHitUi();
 
         if(health <= 0)
         {
@@ -29,7 +29,7 @@ public class PlayerHealth : MonoBehaviour
 
     private void Die()
     {
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        SceneManager.LoadSceneAsync(0);
     }
 
 }
