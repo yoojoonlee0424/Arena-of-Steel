@@ -26,7 +26,7 @@ public class PlayerController : MonoBehaviour
     private Vector2 input;
     private CharacterController controller;
     private InputSystem_Actions inputActions;
-    private PlayerMana playerMana;
+    private PlayerStamina playerStamina;
     private Vector3 moveVelocity;
     private float verticalVelocity;
     public bool isDashing { get; private set; }
@@ -48,7 +48,7 @@ public class PlayerController : MonoBehaviour
     private void Awake()
     {
         controller = GetComponent<CharacterController>();
-        playerMana = GetComponent<PlayerMana>();
+        playerStamina = GetComponent<PlayerStamina>();
         if (inputActions == null)
             inputActions = new InputSystem_Actions();
         Cursor.lockState = CursorLockMode.Locked;
@@ -205,7 +205,7 @@ public class PlayerController : MonoBehaviour
     {
         if (isDashing || dashCooldownTimer > 0f) return;
         if (controller != null && !controller.isGrounded && maxAirDashes > 0 && currentAirDashes >= maxAirDashes) return;
-        if (playerMana != null && !playerMana.UseMana(dashManaCost)) return;
+        if (playerStamina != null && !playerStamina.UseStamina(dashManaCost)) return;
 
         Vector3 camForward = cameraController != null ? cameraController.PlanarForward : transform.forward;
         Vector3 camRight = cameraController != null ? cameraController.PlanarRight : transform.right;

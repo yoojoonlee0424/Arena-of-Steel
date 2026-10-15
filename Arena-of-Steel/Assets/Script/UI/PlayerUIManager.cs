@@ -12,13 +12,13 @@ public class PlayerUIManager : MonoBehaviour
     void OnEnable()
     {
         PlayerHealth.OnHpChanged += HpChanged;
-        PlayerMana.OnMpChanged += MpChanged;
+        PlayerStamina.OnStaminaChanged += MpChanged;
     }
 
     void OnDisable()
     {
         PlayerHealth.OnHpChanged -= HpChanged;
-        PlayerMana.OnMpChanged -= MpChanged;
+        PlayerStamina.OnStaminaChanged -= MpChanged;
     }
 
     void HpChanged(float currentHealth, float maxHealth)
