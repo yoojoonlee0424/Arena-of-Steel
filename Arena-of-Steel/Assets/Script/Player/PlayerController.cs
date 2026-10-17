@@ -7,8 +7,11 @@ public class PlayerController : MonoBehaviour
 
     [Header("이동 설정")]
     [SerializeField] private float walkSpeed = 3f;
-    [SerializeField] private float runSpeed = 6f;
     [SerializeField] private float rotationSpeed = 10f;
+
+    [Header("달리기 설정")]
+    [SerializeField] private float runSpeed = 6f;
+    [SerializeField] private float staminaDrainRate = 15f;
 
     [Header("점프 설정")]
     [SerializeField] private float jumpPower = 2f;
@@ -29,6 +32,7 @@ public class PlayerController : MonoBehaviour
     private PlayerStamina playerStamina;
     private Vector3 moveVelocity;
     private float verticalVelocity;
+    public bool isRunning { get; private set; }
     public bool isDashing { get; private set; }
     private float dashTimer;
     private float dashCooldownTimer;
@@ -150,7 +154,9 @@ public class PlayerController : MonoBehaviour
         input = inputActions.Player.Move.ReadValue<Vector2>();
         input = Vector2.ClampMagnitude(input, 1f);
 
-        bool isRunning = inputActions.Player.Sprint.IsPressed();
+        bool wantRun = inputActions.Player.Sprint.IsPressed() && input.sqrMagnitude > 0.001f;
+        isRunning = wantRun && playerStamina != null && playerStamina.UseStamina(staminaDrainRate * Time.deltaTime);
+
         float currentSpeed = isRunning ? runSpeed : walkSpeed;
 
         Vector3 camForward = cameraController != null ? cameraController.PlanarForward : transform.forward;

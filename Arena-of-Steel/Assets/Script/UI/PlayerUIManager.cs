@@ -8,28 +8,39 @@ public class PlayerUIManager : MonoBehaviour
     [SerializeField] private TextMeshProUGUI hpText;
     [SerializeField] private Image mpGauge;
     [SerializeField] private TextMeshProUGUI mpText;
+    [SerializeField] private TextMeshProUGUI ammoText;
 
-    void OnEnable()
+    private void OnEnable()
     {
         PlayerHealth.OnHpChanged += HpChanged;
         PlayerStamina.OnStaminaChanged += MpChanged;
+        WeaponController.OnAmmoChanged += HandleAmmoChanged;
     }
 
-    void OnDisable()
+    private void OnDisable()
     {
         PlayerHealth.OnHpChanged -= HpChanged;
         PlayerStamina.OnStaminaChanged -= MpChanged;
+        WeaponController.OnAmmoChanged -= HandleAmmoChanged;
     }
 
-    void HpChanged(float currentHealth, float maxHealth)
+    private void HandleAmmoChanged(WeaponController weapon, int current, int max)
     {
-        hpGauge.fillAmount = currentHealth/maxHealth;
-        hpText.text = $"{currentHealth:F0}/{maxHealth}";
+        if (ammoText == null || weapon == null || !weapon.gameObject.activeInHierarchy) return;
+
+        string weaponName = weapon.GunSO != null ? weapon.GunSO.name : "Weapon";
+        ammoText.text = weapon.isReloadng ? $"{weaponName} | RELOADING..." : $"{weaponName} | {current} / {max}";
     }
 
-    void MpChanged(float currentMana, float maxMana)
+    private void HpChanged(float currentHealth, float maxHealth)
     {
-        mpGauge.fillAmount = currentMana/maxMana;
-        mpText.text = $"{currentMana:F0}/{maxMana}";
+        if (hpGauge != null && maxHealth > 0) hpGauge.fillAmount = currentHealth / maxHealth;
+        if (hpText != null) hpText.text = $"{Mathf.Max(0, currentHealth):F0}/{maxHealth}";
+    }
+
+    private void MpChanged(float currentMana, float maxMana)
+    {
+        if (mpGauge != null && maxMana > 0) mpGauge.fillAmount = currentMana / maxMana;
+        if (mpText != null) mpText.text = $"{Mathf.Max(0, currentMana):F0}/{maxMana}";
     }
 }

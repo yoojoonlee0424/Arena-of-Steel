@@ -76,14 +76,17 @@ public class UIWindowManager : MonoBehaviour
     {
         if (Time.frameCount == lastEscapeFrame) return;
         lastEscapeFrame = Time.frameCount;
+        if (GameResultUIManager.IsGameOverOrClear) return;
         if (IsOpen)
         {
             if (ActiveSettingUI != null && ActiveSettingUI.OnBackPressed()) return;
             CloseSettings();
+            Time.timeScale = 1f;
         }
         else
         {
             OpenSettings();
+            Time.timeScale = 0f;
         }
     }
 

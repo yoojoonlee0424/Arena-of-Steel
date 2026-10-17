@@ -1,12 +1,14 @@
-using System;
+﻿using System;
 using UnityEngine;
 
 public class PlayerStamina : MonoBehaviour
 {
-    [Header("마나 설정")]
     [SerializeField] private float maxStamina = 100f;
     [SerializeField] private float regenRate = 10f;
+    [SerializeField] private float regenDelay = 1.2f;
     [SerializeField] private float currentStamina;
+
+    private float regenDelayTimer = 0f;
 
     public float CurrentStamina
     {
@@ -25,7 +27,11 @@ public class PlayerStamina : MonoBehaviour
 
     private void Update()
     {
-        if (currentStamina < maxStamina && regenRate > 0f)
+        if (regenDelayTimer > 0f)
+        {
+            regenDelayTimer -= Time.deltaTime;
+        }
+        else if (currentStamina < maxStamina && regenRate > 0f)
         {
             currentStamina = Mathf.Min(maxStamina, currentStamina + regenRate * Time.deltaTime);
             OnStaminaChanged?.Invoke(currentStamina, maxStamina);
@@ -39,16 +45,17 @@ public class PlayerStamina : MonoBehaviour
 
     public bool UseStamina(float amount)
     {
-        if (CurrentStamina < amount) return false;
+        if (CurrentStamina <= 0f) return false;
 
-        CurrentStamina -= amount;
+        CurrentStamina = Mathf.Max(0f, CurrentStamina - amount);
+        regenDelayTimer = regenDelay;
         OnStaminaChanged?.Invoke(CurrentStamina, maxStamina);
         return true;
     }
 
     public void RestoreStamina(float amount)
     {
-        CurrentStamina = Mathf.Min(maxStamina, CurrentStamina + amount);
+        CurrentStamina = Mathf.Min(maxStamina, currentStamina + amount);
         OnStaminaChanged?.Invoke(CurrentStamina, maxStamina);
     }
 }
