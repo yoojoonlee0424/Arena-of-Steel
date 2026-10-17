@@ -10,12 +10,22 @@ public class Aiming : MonoBehaviour
     [SerializeField] private Transform additionalObject1;
     [SerializeField] private Transform additionalObject2;
 
-    [Header("Variables")]
-    [SerializeField] private float smoothTime = 10f;
-    [SerializeField] private float offsetX = 10f;
-    [SerializeField] private float offsetY = 10f;
-    [SerializeField] private float offsetZ = 10f;
+    [Header("Weapon Data")]
+    [SerializeField] private GunSO gunSO;
+
+    public GunSO GunSO
+    {
+        get => gunSO;
+        set => gunSO = value;
+    }
+
+    [Header("State")]
     [SerializeField] private bool IsAiming = false;
+
+    private float smoothTime => gunSO != null ? gunSO.aimSmoothTime : 20f;
+    private float offsetX => gunSO != null ? gunSO.aimOffsetX : 0f;
+    private float offsetY => gunSO != null ? gunSO.aimOffsetY : 0.02f;
+    private float offsetZ => gunSO != null ? gunSO.aimOffsetZ : 0f;
 
     private Vector3 originalWeaponPosition;
     private Vector3 lastWeaponLocalPosition;

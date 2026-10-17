@@ -15,6 +15,7 @@ MonoBehaviour:
   reloadTime: 3.5
   fireRate: 0.6
   magsize: 7
+  damage: 25
   bullet: {fileID: 6253391593911018001, guid: ebf6247860908d74eb68be8bf1ecd977, type: 3}
   weaponFlash: {fileID: 4377480359558679972, guid: 3e99e0019ecf0a94b904a37c633f1f1b, type: 3}
   pitchKick: -7
@@ -22,3 +23,8 @@ MonoBehaviour:
   yawRandomness: 1
   returnStrength: 40
   damping: 18
+  aimSmoothTime: 20
+  aimOffsetX: 0
+  aimOffsetY: 0.02
+  aimOffsetZ: -0.0125
+  pickupPrefab: {fileID: 1191483000086003563, guid: 913ec988a73694745be1fb65b5f5236b, type: 3}

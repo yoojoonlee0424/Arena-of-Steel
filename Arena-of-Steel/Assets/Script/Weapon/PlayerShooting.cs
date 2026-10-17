@@ -14,7 +14,8 @@ public class PlayerShooting : MonoBehaviour
     public Aiming Aiming2;
     public bool isHoldingShoot;
 
-    private bool isSprint;
+    private PlayerController playerController;
+    private bool isSprint => playerController != null && playerController.isRunning;
     private bool isAim;
     private InputSystem_Actions inputActions;
     private bool ownsInputActions;
@@ -24,10 +25,10 @@ public class PlayerShooting : MonoBehaviour
         if (WeaponSwap == null)
             WeaponSwap = GetComponent<WeaponSwap>();
 
-        var pc = GetComponent<PlayerController>();
-        if (pc != null)
+        playerController = GetComponent<PlayerController>();
+        if (playerController != null)
         {
-            inputActions = pc.InputActions;
+            inputActions = playerController.InputActions;
         }
         else
         {
@@ -37,6 +38,12 @@ public class PlayerShooting : MonoBehaviour
         }
     }
 
+    private void Start()
+    {
+        if (Aiming1 != null && Gun1 != null) Aiming1.GunSO = Gun1.GunSO;
+        if (Aiming2 != null && Gun2 != null) Aiming2.GunSO = Gun2.GunSO;
+    }
+
     private void OnEnable()
     {
         if (inputActions == null) return;
@@ -44,8 +51,6 @@ public class PlayerShooting : MonoBehaviour
         inputActions.Player.Attack.canceled += OnAttackCanceled;
         inputActions.Player.Reload.performed += OnReloadPerformed;
         inputActions.Player.Aim.performed += OnAimPerformed;
-        inputActions.Player.Sprint.started += OnSprintStarted;
-        inputActions.Player.Sprint.canceled += OnSprintCanceled;
     }
 
     private void OnDisable()
@@ -55,8 +60,6 @@ public class PlayerShooting : MonoBehaviour
         inputActions.Player.Attack.canceled -= OnAttackCanceled;
         inputActions.Player.Reload.performed -= OnReloadPerformed;
         inputActions.Player.Aim.performed -= OnAimPerformed;
-        inputActions.Player.Sprint.started -= OnSprintStarted;
-        inputActions.Player.Sprint.canceled -= OnSprintCanceled;
         isHoldingShoot = false;
     }
 
@@ -105,16 +108,6 @@ public class PlayerShooting : MonoBehaviour
         if (Gun2 != null) Gun2.isAim();
     }
 
-    private void OnSprintStarted(InputAction.CallbackContext _)
-    {
-        isSprint = true;
-    }
-
-    private void OnSprintCanceled(InputAction.CallbackContext _)
-    {
-        isSprint = false;
-    }
-
     private void Update()
     {
         if (isHoldingShoot && Gun1 != null && WeaponSwap != null && WeaponSwap.isMain)
@@ -132,6 +125,8 @@ public class PlayerShooting : MonoBehaviour
             if (Aiming1 != null) Aiming1.UpdateAiming();
             if (Aiming2 != null) Aiming2.UpdateAiming();
             isAim = false;
+            if (Gun1 != null) Gun1.isAim();
+            if (Gun2 != null) Gun2.isAim();
         }
 
         if (Rig1 != null && Gun1 != null)
