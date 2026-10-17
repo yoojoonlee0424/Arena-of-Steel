@@ -1,9 +1,8 @@
 using UnityEngine;
-using UnityEngine.InputSystem.XR;
-
 
 public class AnimationController : MonoBehaviour
 {
+    [SerializeField] private float dampTime = 0.4f;
     private CharacterController controller;
     private PlayerController playerController;
 
@@ -27,13 +26,9 @@ public class AnimationController : MonoBehaviour
             Vector3 horizontalVelocity = new Vector3(controller.velocity.x, 0, controller.velocity.z);
             horizontalSpeed = horizontalVelocity.magnitude;
 
-            animator.SetFloat("Speed", horizontalSpeed,0.4f,Time.deltaTime);
+            animator.SetFloat("Speed", horizontalSpeed, dampTime, Time.deltaTime);
 
         }
         
     }
-
-
-
-
 }

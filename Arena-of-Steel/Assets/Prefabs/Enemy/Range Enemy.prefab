@@ -98,7 +98,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 4eff95541eb0e5345986c85574c8e3da, type: 2}
+  - {fileID: -876546973899608171, guid: 0fbcaa711a24cb84cb586cc2e09a3c3a, type: 3}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -210,7 +210,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 73c176f402d2c2f4d929aa5da7585d17, type: 2}
+  - {fileID: -876546973899608171, guid: 0fbcaa711a24cb84cb586cc2e09a3c3a, type: 3}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -247,10 +247,10 @@ GameObject:
   - component: {fileID: 3711082696070959068}
   - component: {fileID: 4028331519113307568}
   - component: {fileID: 4801666229195997209}
-  - component: {fileID: 5389274873665576893}
+  - component: {fileID: -182299518242996088}
   - component: {fileID: 8988734582630385340}
   m_Layer: 0
-  m_Name: Enemy
+  m_Name: Range Enemy
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -306,7 +306,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 86a2497be64dde745ac485c5d9bcc0ce, type: 2}
+  - {fileID: -876546973899608171, guid: 0fbcaa711a24cb84cb586cc2e09a3c3a, type: 3}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -380,7 +380,7 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 80
   m_CollisionDetection: 0
---- !u!114 &5389274873665576893
+--- !u!114 &-182299518242996088
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -389,28 +389,16 @@ MonoBehaviour:
   m_GameObject: {fileID: 7960004559390287326}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3ebd793aadaef1a42b00ffb273fa7ee5, type: 3}
+  m_Script: {fileID: 11500000, guid: 61676f5ed6888e84c8ce0f33dac85344, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Enemy
-  health: 100
-  damageHit: 20
+  m_EditorClassIdentifier: Assembly-CSharp::RangedEnemy
+  enemyData: {fileID: 11400000, guid: c37ddd29096402c458f0d494a9f44eec, type: 2}
+  hitMat: {fileID: -8469494145858465668, guid: b59ff7f78b9d68e46b327ba5415b61b5, type: 3}
+  EnemyBody: {fileID: 7960004559390287326}
   bulletPrefab: {fileID: 6253391593911018001, guid: ebf6247860908d74eb68be8bf1ecd977, type: 3}
   bulletSpwanPoint: {fileID: 5950731790125998143}
   WeaponFlash: {fileID: 4377480359558679972, guid: 3e99e0019ecf0a94b904a37c633f1f1b, type: 3}
   bloom: 0.75
-  fireRate: 0.5
-  lastShotTime: 0
-  hitMat: {fileID: 2100000, guid: 2a814b1bb250f824e972f22e708badb0, type: 2}
-  EnemyBody: {fileID: 7960004559390287326}
-  currentPointIndex: 0
-  currentTarget: {x: 0, y: 0, z: 0}
-  positionThreshold: 2
-  idleTime: 5
-  attackDistance: 30
-  maxVisionDistance: 60
-  minChasingHealth: 30
-  partrolPoints: []
-  state: 0
 --- !u!195 &8988734582630385340
 NavMeshAgent:
   m_ObjectHideFlags: 0
