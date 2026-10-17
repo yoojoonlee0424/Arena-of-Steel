@@ -23,6 +23,26 @@ public class SceneLoader : MonoBehaviour
             return;
         }
 
+        var loader = CreateLoader();
+        loader.StartCoroutine(loader.LoadRoutine(sceneName, -1));
+    }
+
+    public static void Load(int sceneIndex)
+    {
+        if (IsLoading) return;
+
+        if (sceneIndex < 0 || sceneIndex >= SceneManager.sceneCountInBuildSettings)
+        {
+            Debug.LogWarning("[SceneLoader] Scene index out of range: " + sceneIndex);
+            return;
+        }
+
+        var loader = CreateLoader();
+        loader.StartCoroutine(loader.LoadRoutine(null, sceneIndex));
+    }
+
+    private static SceneLoader CreateLoader()
+    {
         UIWindowManager.Instance?.CloseSettings();
 
         SceneLoader loader = null;
@@ -43,10 +63,10 @@ public class SceneLoader : MonoBehaviour
             loader = new GameObject(nameof(SceneLoader)).AddComponent<SceneLoader>();
 
         DontDestroyOnLoad(loader.gameObject);
-        loader.StartCoroutine(loader.LoadRoutine(sceneName));
+        return loader;
     }
 
-    private IEnumerator LoadRoutine(string sceneName)
+    private IEnumerator LoadRoutine(string sceneName, int sceneIndex)
     {
         IsLoading = true;
         Time.timeScale = 1f;
@@ -56,7 +76,10 @@ public class SceneLoader : MonoBehaviour
         SetProgress(0f);
         yield return FadeRoutine(0f, 1f);
 
-        var op = SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single);
+        var op = !string.IsNullOrEmpty(sceneName)
+            ? SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Single)
+            : SceneManager.LoadSceneAsync(sceneIndex, LoadSceneMode.Single);
+
         while (!op.isDone)
         {
             SetProgress(op.progress);
