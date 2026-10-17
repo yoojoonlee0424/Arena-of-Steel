@@ -97,9 +97,6 @@ namespace VoxelDestructionPro.Vox
             return true;
         }
 
-        /// <summary>
-        /// 활성화된 유효 복셀의 총 개수를 반환합니다.
-        /// </summary>
         public int CountActive()
         {
             if (voxels == null) return 0;
@@ -109,9 +106,38 @@ namespace VoxelDestructionPro.Vox
             return count;
         }
 
-        /// <summary>
-        /// 테스트용 직육면체 복셀 데이터를 생성합니다.
-        /// </summary>
+        public bool TryGetActiveBounds(out Vector3Int min, out Vector3Int max)
+        {
+            min = new Vector3Int(int.MaxValue, int.MaxValue, int.MaxValue);
+            max = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
+            if (voxels == null) return false;
+
+            bool any = false;
+            int lx = length.x;
+            int ly = length.y;
+            int lz = length.z;
+            int idx = 0;
+
+            for (int z = 0; z < lz; z++)
+            {
+                for (int y = 0; y < ly; y++)
+                {
+                    for (int x = 0; x < lx; x++, idx++)
+                    {
+                        if (!voxels[idx].active) continue;
+                        any = true;
+                        if (x < min.x) min.x = x;
+                        if (y < min.y) min.y = y;
+                        if (z < min.z) min.z = z;
+                        if (x > max.x) max.x = x;
+                        if (y > max.y) max.y = y;
+                        if (z > max.z) max.z = z;
+                    }
+                }
+            }
+            return any;
+        }
+
         public static VoxVoxelData CreateBox(int sizeX, int sizeY, int sizeZ, Color color1, Color color2)
         {
             if (sizeX <= 0 || sizeY <= 0 || sizeZ <= 0) return null;
@@ -130,9 +156,6 @@ namespace VoxelDestructionPro.Vox
             return new VoxVoxelData(v, pal, size);
         }
 
-        /// <summary>
-        /// MagicaVoxel 데이터로부터 복셀 데이터를 생성합니다. (Z-up을 Unity Y-up으로 변환)
-        /// </summary>
         public static VoxVoxelData FromVox(int sizeX, int sizeY, int sizeZ, VoxVoxLoader.VoxVoxel[] xyzis, Color32[] palette256)
         {
             if (sizeX <= 0 || sizeY <= 0 || sizeZ <= 0) return null;
@@ -162,15 +185,31 @@ namespace VoxelDestructionPro.Vox
 
     public static class VoxMesher
     {
-        private static readonly List<Vector3> s_Vertices = new List<Vector3>();
-        private static readonly List<int> s_Triangles = new List<int>();
-        private static readonly List<Vector3> s_Normals = new List<Vector3>();
-        private static readonly List<Color> s_Colors = new List<Color>();
+        private static readonly List<Vector3> s_Vertices = new List<Vector3>(4096);
+        private static readonly List<int> s_Triangles = new List<int>(6144);
+        private static readonly List<Vector3> s_Normals = new List<Vector3>(4096);
+        private static readonly List<Color> s_Colors = new List<Color>(4096);
         private static VoxVoxel[] s_MaskBuffer;
+        private static readonly int[] s_Dims = new int[3];
+        private static readonly int[] s_X = new int[3];
+        private static readonly int[] s_Q = new int[3];
+        private static readonly int[] s_Du = new int[3];
+        private static readonly int[] s_Dv = new int[3];
 
-        public static Mesh BuildMesh(VoxVoxelData data, float voxelSize)
+        public static Mesh BuildMesh(VoxVoxelData data, float voxelSize, Mesh targetMesh = null)
         {
-            Mesh mesh = new Mesh { name = "VoxVoxelMesh" };
+            Mesh mesh;
+            if (targetMesh != null)
+            {
+                mesh = targetMesh;
+                mesh.Clear();
+            }
+            else
+            {
+                mesh = new Mesh { name = "VoxVoxelMesh" };
+                mesh.MarkDynamic();
+            }
+
             if (data == null || data.voxels == null || data.voxels.Length == 0)
                 return mesh;
 
@@ -179,33 +218,43 @@ namespace VoxelDestructionPro.Vox
             s_Normals.Clear();
             s_Colors.Clear();
 
-            int[] dims = { data.length.x, data.length.y, data.length.z };
-            int maxMaskSize = Mathf.Max(dims[0] * dims[1], dims[1] * dims[2], dims[0] * dims[2]);
+            s_Dims[0] = data.length.x;
+            s_Dims[1] = data.length.y;
+            s_Dims[2] = data.length.z;
+
+            int maxMaskSize = Mathf.Max(s_Dims[0] * s_Dims[1], s_Dims[1] * s_Dims[2], s_Dims[0] * s_Dims[2]);
             if (s_MaskBuffer == null || s_MaskBuffer.Length < maxMaskSize)
                 s_MaskBuffer = new VoxVoxel[Mathf.NextPowerOfTwo(maxMaskSize)];
-            Array.Clear(s_MaskBuffer, 0, maxMaskSize);
+
             VoxVoxel[] mask = s_MaskBuffer;
             VoxVoxel empty = new VoxVoxel(false, 0);
             Vector3 blockMinVertex = new Vector3(-0.5f, -0.5f, -0.5f);
+            int lenX = data.length.x;
+            int lenY = data.length.y;
 
             for (int d = 0; d < 3; d++)
             {
                 int u = (d + 1) % 3;
                 int v = (d + 2) % 3;
-                int[] x = new int[3];
-                int[] q = new int[3];
-                q[d] = 1;
+                s_X[0] = 0; s_X[1] = 0; s_X[2] = 0;
+                s_Q[0] = 0; s_Q[1] = 0; s_Q[2] = 0;
+                s_Q[d] = 1;
 
-                for (x[d] = -1; x[d] < dims[d];)
+                int dimD = s_Dims[d];
+                int dimU = s_Dims[u];
+                int dimV = s_Dims[v];
+
+                for (s_X[d] = -1; s_X[d] < dimD;)
                 {
                     int n = 0;
-                    for (x[v] = 0; x[v] < dims[v]; ++x[v])
-                        for (x[u] = 0; x[u] < dims[u]; ++x[u])
+                    for (s_X[v] = 0; s_X[v] < dimV; ++s_X[v])
+                    {
+                        for (s_X[u] = 0; s_X[u] < dimU; ++s_X[u])
                         {
-                            VoxVoxel current = x[d] >= 0 ? data.voxels[x[0] + data.length.x * (x[1] + data.length.y * x[2])] : empty;
-                            VoxVoxel compare = x[d] < dims[d] - 1 ? data.voxels[x[0] + q[0] + data.length.x * (x[1] + q[1] + data.length.y * (x[2] + q[2]))] : empty;
+                            VoxVoxel current = s_X[d] >= 0 ? data.voxels[s_X[0] + lenX * (s_X[1] + lenY * s_X[2])] : empty;
+                            VoxVoxel compare = s_X[d] < dimD - 1 ? data.voxels[s_X[0] + s_Q[0] + lenX * (s_X[1] + s_Q[1] + lenY * (s_X[2] + s_Q[2]))] : empty;
 
-                            if (current.active == compare.active || (current.active && compare.active))
+                            if (current.active == compare.active)
                                 mask[n++] = empty;
                             else if (!current.active)
                             {
@@ -218,44 +267,48 @@ namespace VoxelDestructionPro.Vox
                                 mask[n++] = current;
                             }
                         }
+                    }
 
-                    x[d]++;
+                    s_X[d]++;
                     n = 0;
 
-                    for (int j = 0; j < dims[v]; j++)
-                        for (int i = 0; i < dims[u];)
+                    for (int j = 0; j < dimV; j++)
+                    {
+                        for (int i = 0; i < dimU;)
                         {
                             if (mask[n].active || mask[n].normal != 0)
                             {
                                 int w = 1, h = 1;
-                                for (; i + w < dims[u] && mask[n + w].Equals(mask[n]); w++) { }
+                                for (; i + w < dimU && mask[n + w].Equals(mask[n]); w++) { }
                                 bool done = false;
-                                for (; j + h < dims[v]; h++)
+                                for (; j + h < dimV; h++)
                                 {
                                     for (int k = 0; k < w; ++k)
-                                        if (mask[n + k + h * dims[u]].active || !mask[n + k + h * dims[u]].Equals(mask[n]))
+                                    {
+                                        if (mask[n + k + h * dimU].active || !mask[n + k + h * dimU].Equals(mask[n]))
                                         {
                                             done = true;
                                             break;
                                         }
+                                    }
                                     if (done) break;
                                 }
 
-                                x[u] = i;
-                                x[v] = j;
-                                int[] du = new int[3]; du[u] = w;
-                                int[] dv = new int[3]; dv[v] = h;
+                                s_X[u] = i;
+                                s_X[v] = j;
+                                s_Du[0] = 0; s_Du[1] = 0; s_Du[2] = 0; s_Du[u] = w;
+                                s_Dv[0] = 0; s_Dv[1] = 0; s_Dv[2] = 0; s_Dv[v] = h;
 
                                 AddQuad(s_Vertices, s_Triangles, s_Normals, s_Colors,
-                                    blockMinVertex + new Vector3(x[0], x[1], x[2]),
-                                    blockMinVertex + new Vector3(x[0] + du[0], x[1] + du[1], x[2] + du[2]),
-                                    blockMinVertex + new Vector3(x[0] + du[0] + dv[0], x[1] + du[1] + dv[1], x[2] + du[2] + dv[2]),
-                                    blockMinVertex + new Vector3(x[0] + dv[0], x[1] + dv[1], x[2] + dv[2]),
+                                    blockMinVertex + new Vector3(s_X[0], s_X[1], s_X[2]),
+                                    blockMinVertex + new Vector3(s_X[0] + s_Du[0], s_X[1] + s_Du[1], s_X[2] + s_Du[2]),
+                                    blockMinVertex + new Vector3(s_X[0] + s_Du[0] + s_Dv[0], s_X[1] + s_Du[1] + s_Dv[1], s_X[2] + s_Du[2] + s_Dv[2]),
+                                    blockMinVertex + new Vector3(s_X[0] + s_Dv[0], s_X[1] + s_Dv[1], s_X[2] + s_Dv[2]),
                                     mask[n], AxisMask(d), data.palette, voxelSize);
 
                                 for (int l = 0; l < h; ++l)
                                     for (int k = 0; k < w; ++k)
-                                        mask[n + k + l * dims[u]] = empty;
+                                        mask[n + k + l * dimU] = empty;
 
                                 i += w;
                                 n += w;
@@ -266,6 +319,7 @@ namespace VoxelDestructionPro.Vox
                                 n++;
                             }
                         }
+                    }
                 }
             }
 
@@ -273,7 +327,7 @@ namespace VoxelDestructionPro.Vox
                 mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 
             mesh.SetVertices(s_Vertices);
-            mesh.SetTriangles(s_Triangles, 0);
+            mesh.SetTriangles(s_Triangles, 0, false);
             mesh.SetNormals(s_Normals);
             mesh.SetColors(s_Colors);
             mesh.RecalculateBounds();
@@ -324,9 +378,6 @@ namespace VoxelDestructionPro.Vox
             public Color32[] palette256;
         }
 
-        /// <summary>
-        /// .vox 파일을 로드하여 VoxVoxelData 객체로 반환합니다.
-        /// </summary>
         public static VoxVoxelData LoadFromFile(string pathInProject, bool log = false)
         {
             if (string.IsNullOrWhiteSpace(pathInProject)) return null;
@@ -339,7 +390,8 @@ namespace VoxelDestructionPro.Vox
 
             try
             {
-                VoxModel model = ReadVoxFirstModel(fullPath);
+                using var fs = File.OpenRead(fullPath);
+                VoxModel model = ReadVoxFirstModel(fs);
                 if (model.sizeX <= 0 || model.sizeY <= 0 || model.sizeZ <= 0 || model.voxels == null) return null;
                 return VoxVoxelData.FromVox(model.sizeX, model.sizeY, model.sizeZ, model.voxels, model.palette256);
             }
@@ -350,12 +402,12 @@ namespace VoxelDestructionPro.Vox
             }
         }
 
-        private static VoxModel ReadVoxFirstModel(string path)
+        private static VoxModel ReadVoxFirstModel(Stream stream)
         {
             VoxModel model = new VoxModel();
-            using var br = new BinaryReader(File.OpenRead(path));
+            using var br = new BinaryReader(stream);
             if (new string(br.ReadChars(4)) != "VOX ") throw new Exception("Not a VOX file");
-            br.ReadInt32(); // version
+            br.ReadInt32();
             if (new string(br.ReadChars(4)) != "MAIN") throw new Exception("VOX missing MAIN");
 
             int mainContent = br.ReadInt32();

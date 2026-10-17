@@ -1,6 +1,9 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using Unity.AI.Navigation;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace VoxelDestructionPro.Vox
 {
@@ -20,12 +23,10 @@ namespace VoxelDestructionPro.Vox
         [SerializeField] private bool playSoundAtHitPoint = true;
 
         [Header("Structural Integrity & Ground Anchor")]
-        [Tooltip("바닥(Local Y <= groundAnchorY)에 닿은 덩어리를 메인 지탱 벽으로 유지합니다.")]
         [SerializeField] private bool anchorToGround = true;
         [SerializeField] private int groundAnchorY = 0;
 
         [Header("Collapse Settings")]
-        [Tooltip("남은 복셀이 이 개수 이하가 되면 잔해를 남기지 않고 전면 붕괴(파티클 소멸)합니다.")]
         [SerializeField] private int collapseThreshold = 8;
         [Range(0f, 0.3f)]
         [SerializeField] private float collapseRatio = 0f;
@@ -33,7 +34,6 @@ namespace VoxelDestructionPro.Vox
         [Header("Debris & Fragments")]
         [SerializeField] private bool emitDebrisParticles = true;
         [SerializeField] private int minClusterSize = 4;
-        [Tooltip("이 복셀 개수 이상의 큰 덩어리는 타이머로 사라지지 않고 영구 물리 오브젝트로 유지됩니다 (0이면 모든 파편에 타이머 적용).")]
         [SerializeField] private int permanentFragmentMinSize = 25;
         [SerializeField] private int maxFragmentsPerCall = 8;
         [SerializeField] private float defaultFragmentLifetime = 8f;
@@ -46,7 +46,6 @@ namespace VoxelDestructionPro.Vox
         [SerializeField] private Color wallColor2 = new Color(0.45f, 0.45f, 0.5f);
 
         [Header("VOX Model")]
-        [Tooltip("Assets 폴더 기준 .vox 파일 경로 (예: Assets/Art/PlaceHolderAssets/castle.vox)")]
         [SerializeField] private string voxAssetPath = "Assets/Art/PlaceHolderAssets/castle.vox";
         [SerializeField] private bool loadVoxOnStart = false;
 
@@ -58,22 +57,86 @@ namespace VoxelDestructionPro.Vox
         private MeshFilter meshFilter;
         private MeshRenderer meshRenderer;
         private MeshCollider meshCollider;
+        private NavMeshObstacle navObstacle;
+        private NavMeshModifier navModifier;
+        private Mesh runtimeMesh;
+
         private static Transform s_FragmentRoot;
         private int initialVoxelCount;
+        private int activeVoxelCount;
         private bool isFragment = false;
+        private bool isPermanentFragment = false;
         private Coroutine settleCoroutine;
+
+        private bool hasPendingDamage = false;
+        private bool hasDirtyBounds = false;
+        private int pendingDestroyedCount = 0;
+        private Vector3 pendingHitPoint;
+        private VoxelDamageArgs pendingArgs;
+        private Vector3Int pendingDirtyMin;
+        private Vector3Int pendingDirtyMax;
+
+        private const MeshColliderCookingOptions FastCookingOptions =
+            MeshColliderCookingOptions.CookForFasterSimulation |
+            MeshColliderCookingOptions.EnableMeshCleaning |
+            MeshColliderCookingOptions.WeldColocatedVertices |
+            MeshColliderCookingOptions.UseFastMidphase;
 
         private static int[] visitedBuffer;
         private static int currentRunId = 0;
-        private static readonly Queue<int> s_BfsQueue = new Queue<int>();
-        private static readonly List<GameObject> activeFragments = new List<GameObject>();
+        private static readonly Queue<int> s_BfsQueue = new Queue<int>(1024);
+        private static readonly Stack<List<int>> s_ClusterListPool = new Stack<List<int>>(32);
+        private static readonly List<ClusterData> s_Clusters = new List<ClusterData>(16);
+        private static readonly List<int> s_FragmentsToSpawn = new List<int>(16);
+        private static readonly List<GameObject> activeFragments = new List<GameObject>(64);
         private static ParticleSystem sharedParticleSystem;
         private static Mesh cachedCubeMesh;
-        private static readonly List<Collider> s_PlayerColliders = new List<Collider>();
+        private static readonly List<Collider> s_PlayerColliders = new List<Collider>(8);
 
-        public static void IgnorePlayerCollision(Collider col)
+        private static NavMeshSurface s_NavSurface;
+        private static bool s_SearchedNavSurface = false;
+        private static float s_NextNavUpdateTime = 0f;
+        private static bool s_NavUpdatePending = false;
+        private static bool s_NavHookRegistered = false;
+        private static AsyncOperation s_NavUpdateOp;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void ResetStaticState()
+        {
+            if (s_NavHookRegistered)
+            {
+                NavMesh.onPreUpdate -= ProcessPendingNavMeshUpdate;
+                s_NavHookRegistered = false;
+            }
+            s_NavSurface = null;
+            s_SearchedNavSurface = false;
+            s_NextNavUpdateTime = 0f;
+            s_NavUpdatePending = false;
+            s_NavUpdateOp = null;
+            s_FragmentRoot = null;
+            sharedParticleSystem = null;
+            s_PlayerColliders.Clear();
+            activeFragments.Clear();
+        }
+
+        public static void IgnorePlayerCollision(Collider col) => SetPlayerCollisionIgnore(col, true);
+
+        public static void SetPlayerCollisionIgnore(Collider col, bool ignore)
         {
             if (col == null) return;
+            RefreshPlayerColliders();
+
+            for (int i = 0; i < s_PlayerColliders.Count; i++)
+            {
+                if (s_PlayerColliders[i] != null && s_PlayerColliders[i].enabled)
+                {
+                    Physics.IgnoreCollision(col, s_PlayerColliders[i], ignore);
+                }
+            }
+        }
+
+        private static void RefreshPlayerColliders()
+        {
             if (s_PlayerColliders.Count == 0 || s_PlayerColliders[0] == null)
             {
                 s_PlayerColliders.Clear();
@@ -83,14 +146,161 @@ namespace VoxelDestructionPro.Vox
                     s_PlayerColliders.AddRange(players[i].GetComponentsInChildren<Collider>(true));
                 }
             }
+        }
+
+        private static bool IsBoundsOverlappingPlayer(Collider col)
+        {
+            if (col == null || !col.enabled) return false;
+            RefreshPlayerColliders();
+            Bounds b = col.bounds;
+            b.Expand(0.15f);
 
             for (int i = 0; i < s_PlayerColliders.Count; i++)
             {
-                if (s_PlayerColliders[i] != null && s_PlayerColliders[i].enabled)
+                Collider pCol = s_PlayerColliders[i];
+                if (pCol == null || !pCol.enabled || pCol.isTrigger) continue;
+                if (b.Intersects(pCol.bounds)) return true;
+            }
+            return false;
+        }
+
+        private static readonly List<NavMeshBuildSource> s_NavSources = new List<NavMeshBuildSource>(64);
+        private static readonly List<NavMeshBuildMarkup> s_NavMarkups = new List<NavMeshBuildMarkup>(32);
+
+        private static NavMeshSurface GetNavSurface()
+        {
+            if (!s_SearchedNavSurface || s_NavSurface == null)
+            {
+                s_SearchedNavSurface = true;
+                s_NavSurface = FindFirstObjectByType<NavMeshSurface>();
+                if (s_NavSurface != null)
+                    s_NavSurface.ignoreNavMeshObstacle = false;
+            }
+            return s_NavSurface;
+        }
+
+        public static void RequestNavMeshUpdate()
+        {
+            if (!Application.isPlaying) return;
+            var surface = GetNavSurface();
+            if (surface == null || surface.navMeshData == null) return;
+            s_NavUpdatePending = true;
+            if (!s_NavHookRegistered)
+            {
+                NavMesh.onPreUpdate += ProcessPendingNavMeshUpdate;
+                s_NavHookRegistered = true;
+            }
+        }
+
+        private static void ProcessPendingNavMeshUpdate()
+        {
+            if (!s_NavUpdatePending)
+            {
+                if (s_NavHookRegistered)
                 {
-                    Physics.IgnoreCollision(col, s_PlayerColliders[i], true);
+                    NavMesh.onPreUpdate -= ProcessPendingNavMeshUpdate;
+                    s_NavHookRegistered = false;
+                }
+                return;
+            }
+
+            if (Time.unscaledTime >= s_NextNavUpdateTime && (s_NavUpdateOp == null || s_NavUpdateOp.isDone))
+            {
+                var surface = GetNavSurface();
+                s_NavUpdatePending = false;
+                if (s_NavHookRegistered)
+                {
+                    NavMesh.onPreUpdate -= ProcessPendingNavMeshUpdate;
+                    s_NavHookRegistered = false;
+                }
+                if (surface != null && surface.navMeshData != null)
+                {
+                    s_NextNavUpdateTime = Time.unscaledTime + 0.2f;
+                    s_NavUpdateOp = UpdateSurfaceFiltered(surface);
                 }
             }
+        }
+
+        private static AsyncOperation UpdateSurfaceFiltered(NavMeshSurface surface)
+        {
+            s_NavSources.Clear();
+            s_NavMarkups.Clear();
+
+            var modifiers = NavMeshModifier.activeModifiers;
+            for (int i = 0; i < modifiers.Count; i++)
+            {
+                var m = modifiers[i];
+                if ((surface.layerMask & (1 << m.gameObject.layer)) == 0 || !m.AffectsAgentType(surface.agentTypeID))
+                    continue;
+
+                s_NavMarkups.Add(new NavMeshBuildMarkup
+                {
+                    root = m.transform,
+                    overrideArea = m.overrideArea,
+                    area = m.area,
+                    ignoreFromBuild = m.ignoreFromBuild,
+                    applyToChildren = m.applyToChildren,
+                    overrideGenerateLinks = m.overrideGenerateLinks,
+                    generateLinks = m.generateLinks
+                });
+            }
+
+            Transform collectRoot = surface.collectObjects == CollectObjects.Children ? surface.transform : null;
+            NavMeshBuilder.CollectSources(collectRoot, surface.layerMask, surface.useGeometry, surface.defaultArea, s_NavMarkups, s_NavSources);
+
+            s_NavSources.RemoveAll(src =>
+            {
+                if (src.shape == NavMeshBuildSourceShape.Mesh && src.sourceObject is Mesh m && !m.isReadable) return true;
+                if (src.component == null) return false;
+                GameObject go = src.component.gameObject;
+                if (go.GetComponentInParent<NavMeshAgent>() != null) return true;
+                if (go.GetComponentInParent<CharacterController>() != null) return true;
+                if (go.GetComponentInParent<Rigidbody>() is Rigidbody rb && !rb.isKinematic) return true;
+                if (go.GetComponentInParent<Collider>() == null && go.GetComponentInChildren<Collider>() == null) return true;
+                return false;
+            });
+
+            Bounds bounds = CalculateSurfaceBounds(surface, s_NavSources);
+            return NavMeshBuilder.UpdateNavMeshDataAsync(surface.navMeshData, surface.GetBuildSettings(), s_NavSources, bounds);
+        }
+
+        private static Bounds CalculateSurfaceBounds(NavMeshSurface surface, List<NavMeshBuildSource> sources)
+        {
+            if (surface.collectObjects == CollectObjects.Volume)
+                return new Bounds(surface.center, new Vector3(Mathf.Abs(surface.size.x), Mathf.Abs(surface.size.y), Mathf.Abs(surface.size.z)));
+
+            Matrix4x4 worldToLocal = Matrix4x4.TRS(surface.transform.position, surface.transform.rotation, Vector3.one).inverse;
+            Bounds result = default;
+            bool hasAny = false;
+
+            for (int i = 0; i < sources.Count; i++)
+            {
+                var src = sources[i];
+                Bounds b;
+                if (src.shape == NavMeshBuildSourceShape.Mesh && src.sourceObject is Mesh m)
+                    b = TransformBounds(worldToLocal * src.transform, m.bounds);
+                else if (src.shape == NavMeshBuildSourceShape.Box || src.shape == NavMeshBuildSourceShape.Sphere || src.shape == NavMeshBuildSourceShape.Capsule || src.shape == NavMeshBuildSourceShape.ModifierBox)
+                    b = TransformBounds(worldToLocal * src.transform, new Bounds(Vector3.zero, src.size));
+                else
+                    continue;
+
+                if (!hasAny) { result = b; hasAny = true; }
+                else result.Encapsulate(b);
+            }
+
+            result.Expand(0.1f);
+            return result;
+        }
+
+        private static Bounds TransformBounds(Matrix4x4 mat, Bounds bounds)
+        {
+            Vector3 ax = mat.MultiplyVector(Vector3.right);
+            Vector3 ay = mat.MultiplyVector(Vector3.up);
+            Vector3 az = mat.MultiplyVector(Vector3.forward);
+            Vector3 size = new Vector3(Mathf.Abs(ax.x), Mathf.Abs(ax.y), Mathf.Abs(ax.z)) * bounds.size.x +
+                           new Vector3(Mathf.Abs(ay.x), Mathf.Abs(ay.y), Mathf.Abs(ay.z)) * bounds.size.y +
+                           new Vector3(Mathf.Abs(az.x), Mathf.Abs(az.y), Mathf.Abs(az.z)) * bounds.size.z;
+            return new Bounds(mat.MultiplyPoint(bounds.center), size);
         }
 
         public event Action<VoxelDamageResult> OnVoxelDamaged;
@@ -105,35 +315,84 @@ namespace VoxelDestructionPro.Vox
             meshRenderer = GetComponent<MeshRenderer>();
             meshCollider = GetComponent<MeshCollider>();
             if (meshCollider == null) meshCollider = gameObject.AddComponent<MeshCollider>();
+            navObstacle = GetComponent<NavMeshObstacle>();
+            navModifier = GetComponent<NavMeshModifier>();
+            if (navModifier == null) navModifier = gameObject.AddComponent<NavMeshModifier>();
+            navModifier.overrideArea = true;
+            navModifier.area = 1;
+
             bool isDynamic = TryGetComponent<Rigidbody>(out var rb) && !rb.isKinematic;
+            meshCollider.cookingOptions = FastCookingOptions;
             meshCollider.enabled = true;
             meshCollider.convex = isDynamic;
-            if (isDynamic) IgnorePlayerCollision(meshCollider);
+            if (isDynamic) SetPlayerCollisionIgnore(meshCollider, true);
             EnsureMaterial();
         }
 
         private void Start()
         {
-            if (loadVoxOnStart && !string.IsNullOrEmpty(voxAssetPath))
-                LoadVoxModel();
-            else if (generateWallOnStart && (voxelData == null || voxelData.IsEmpty()))
-                GenerateTestWall();
+            if (!isFragment)
+            {
+                navModifier.ignoreFromBuild = false;
+                if (loadVoxOnStart && !string.IsNullOrEmpty(voxAssetPath))
+                    LoadVoxModel();
+                else if (generateWallOnStart)
+                    GenerateTestWall();
+            }
 
-            if (voxelData != null && !isFragment)
-                initialVoxelCount = voxelData.CountActive();
+            if (voxelData != null)
+            {
+                activeVoxelCount = voxelData.CountActive();
+                if (!isFragment)
+                    initialVoxelCount = activeVoxelCount;
+
+                RebuildMesh();
+            }
+
+            if (navObstacle != null && GetNavSurface() != null)
+            {
+                navObstacle.enabled = false;
+                Destroy(navObstacle);
+                navObstacle = null;
+            }
+        }
+
+        private void LateUpdate()
+        {
+            if (hasPendingDamage)
+            {
+                CommitPendingDamage();
+            }
+
+            if (s_NavUpdatePending)
+            {
+                ProcessPendingNavMeshUpdate();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (runtimeMesh != null)
+            {
+                if (Application.isPlaying) Destroy(runtimeMesh);
+                else DestroyImmediate(runtimeMesh);
+                runtimeMesh = null;
+            }
+            if (isFragment)
+            {
+                activeFragments.Remove(gameObject);
+            }
         }
 
 #if UNITY_EDITOR
         private void OnValidate()
         {
-            meshFilter = GetComponent<MeshFilter>();
-            meshRenderer = GetComponent<MeshRenderer>();
-            meshCollider = GetComponent<MeshCollider>();
-            if (meshCollider == null) meshCollider = gameObject.AddComponent<MeshCollider>();
-            EnsureMaterial();
-
-            if (!Application.isPlaying && voxelData != null)
+            if (Application.isPlaying) return;
+            UnityEditor.EditorApplication.delayCall += () =>
+            {
+                if (this == null || Application.isPlaying) return;
                 RebuildMesh();
+            };
         }
 #endif
 
@@ -162,23 +421,27 @@ namespace VoxelDestructionPro.Vox
         public void AssignVoxelData(VoxVoxelData data)
         {
             voxelData = data;
+            activeVoxelCount = data != null ? data.CountActive() : 0;
             if (!isFragment)
-                initialVoxelCount = data != null ? data.CountActive() : 0;
+                initialVoxelCount = activeVoxelCount;
             RebuildMesh();
+#if UNITY_EDITOR
+            if (!Application.isPlaying)
+            {
+                UnityEditor.EditorUtility.SetDirty(this);
+                if (meshFilter != null) UnityEditor.EditorUtility.SetDirty(meshFilter);
+                if (meshCollider != null) UnityEditor.EditorUtility.SetDirty(meshCollider);
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            }
+#endif
         }
 
-        /// <summary>
-        /// 테스트용 벽면 복셀을 생성합니다.
-        /// </summary>
         [ContextMenu("Generate Test Wall")]
         public void GenerateTestWall()
         {
             AssignVoxelData(VoxVoxelData.CreateBox(wallDimensions.x, wallDimensions.y, wallDimensions.z, wallColor1, wallColor2));
         }
 
-        /// <summary>
-        /// 지정된 .vox 파일을 로드하여 복셀 메쉬를 생성합니다.
-        /// </summary>
         [ContextMenu("Load VOX Model")]
         public bool LoadVoxModel()
         {
@@ -186,48 +449,108 @@ namespace VoxelDestructionPro.Vox
             if (data != null)
             {
                 AssignVoxelData(data);
-#if UNITY_EDITOR
-                if (!Application.isPlaying)
-                {
-                    UnityEditor.EditorUtility.SetDirty(this);
-                    UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(gameObject.scene);
-                }
-#endif
                 return true;
             }
             return false;
         }
 
-        /// <summary>
-        /// 복셀 데이터를 기반으로 메쉬 및 콜라이더를 재구성합니다.
-        /// </summary>
         public void RebuildMesh()
         {
             if (meshFilter == null) meshFilter = GetComponent<MeshFilter>();
             if (meshRenderer == null) meshRenderer = GetComponent<MeshRenderer>();
             if (meshCollider == null) meshCollider = GetComponent<MeshCollider>();
             if (meshCollider == null) meshCollider = gameObject.AddComponent<MeshCollider>();
+            if (navObstacle == null) navObstacle = GetComponent<NavMeshObstacle>();
+            if (navModifier == null) navModifier = GetComponent<NavMeshModifier>();
+            if (navModifier == null) navModifier = gameObject.AddComponent<NavMeshModifier>();
+            navModifier.overrideArea = true;
+            navModifier.area = 1;
+            if (!isFragment)
+                navModifier.ignoreFromBuild = false;
 
             EnsureMaterial();
 
-            Mesh mesh = (voxelData != null && !voxelData.IsEmpty())
-                ? VoxMesher.BuildMesh(voxelData, voxelSize)
-                : null;
+            if (!Application.isPlaying && voxelData != null)
+                activeVoxelCount = voxelData.CountActive();
 
-            meshFilter.sharedMesh = mesh;
+            meshCollider.sharedMesh = null;
+
+            if (voxelData != null && activeVoxelCount > 0)
+            {
+                if (!Application.isPlaying && runtimeMesh != null)
+                {
+                    DestroyImmediate(runtimeMesh);
+                    runtimeMesh = null;
+                }
+                runtimeMesh = VoxMesher.BuildMesh(voxelData, voxelSize, runtimeMesh);
+                meshFilter.sharedMesh = runtimeMesh;
+            }
+            else
+            {
+                if (runtimeMesh != null) runtimeMesh.Clear();
+                meshFilter.sharedMesh = null;
+            }
 
             bool isDynamic = TryGetComponent<Rigidbody>(out var rb) && !rb.isKinematic;
+            meshCollider.cookingOptions = FastCookingOptions;
             meshCollider.enabled = true;
-            meshCollider.sharedMesh = null;
             meshCollider.convex = isDynamic;
-            if (mesh != null)
-                meshCollider.sharedMesh = mesh;
+            if (meshFilter.sharedMesh != null && meshFilter.sharedMesh.vertexCount > 0)
+            {
+                meshCollider.sharedMesh = meshFilter.sharedMesh;
+                Physics.SyncTransforms();
+            }
+            if (Application.isPlaying && isFragment && isDynamic)
+                SetPlayerCollisionIgnore(meshCollider, true);
+
+            UpdateNavState();
         }
 
+        private void UpdateNavState()
+        {
+            var surface = GetNavSurface();
+            if (surface != null)
+            {
+                if (navObstacle != null)
+                {
+                    navObstacle.enabled = false;
+                    if (Application.isPlaying) Destroy(navObstacle);
+                    else DestroyImmediate(navObstacle);
+                    navObstacle = null;
+                }
 
-        /// <summary>
-        /// 파편의 낙하 정지 감지 코루틴을 시작합니다.
-        /// </summary>
+                if (Application.isPlaying)
+                {
+                    if (!isFragment || (isPermanentFragment && TryGetComponent<Rigidbody>(out var rb) && rb.isKinematic))
+                        RequestNavMeshUpdate();
+                }
+                else if (surface.navMeshData != null)
+                {
+                    UpdateSurfaceFiltered(surface);
+                }
+                return;
+            }
+
+            if (navObstacle == null) return;
+            if (voxelData == null || activeVoxelCount <= collapseThreshold || !voxelData.TryGetActiveBounds(out Vector3Int min, out Vector3Int max))
+            {
+                navObstacle.enabled = false;
+                return;
+            }
+
+            if (anchorToGround && min.y > groundAnchorY + 2)
+            {
+                navObstacle.enabled = false;
+                return;
+            }
+
+            navObstacle.enabled = true;
+            Vector3 localMin = ((Vector3)min - Vector3.one * 0.5f) * voxelSize;
+            Vector3 localMax = ((Vector3)max + Vector3.one * 0.5f) * voxelSize;
+            navObstacle.center = (localMin + localMax) * 0.5f;
+            navObstacle.size = localMax - localMin;
+        }
+
         public void StartSettlingCheck()
         {
             if (!isFragment || !Application.isPlaying) return;
@@ -235,25 +558,25 @@ namespace VoxelDestructionPro.Vox
             settleCoroutine = StartCoroutine(CheckSettlementRoutine());
         }
 
-        private System.Collections.IEnumerator CheckSettlementRoutine()
+        private IEnumerator CheckSettlementRoutine()
         {
-            yield return new WaitForSeconds(0.4f);
+            yield return new WaitForSeconds(0.35f);
             var rb = GetComponent<Rigidbody>();
             if (rb == null) yield break;
 
             int stillCount = 0;
             while (rb != null && !rb.isKinematic)
             {
-                yield return new WaitForSeconds(0.2f);
+                yield return new WaitForSeconds(0.15f);
                 if (rb == null) yield break;
 
-                if (rb.linearVelocity.sqrMagnitude < 0.05f && rb.angularVelocity.sqrMagnitude < 0.05f)
+                if (rb.IsSleeping() || (rb.linearVelocity.sqrMagnitude < 0.005f && rb.angularVelocity.sqrMagnitude < 0.005f))
                 {
                     stillCount++;
-                    if (stillCount >= 2)
+                    if (rb.IsSleeping() || stillCount >= 4)
                     {
                         SettleFragment();
-                        yield break;
+                        break;
                     }
                 }
                 else
@@ -261,11 +584,41 @@ namespace VoxelDestructionPro.Vox
                     stillCount = 0;
                 }
             }
+
+            if (meshCollider != null)
+            {
+                if (IsBoundsOverlappingPlayer(meshCollider))
+                {
+                    SetPlayerCollisionIgnore(meshCollider, true);
+                    while (meshCollider != null && IsBoundsOverlappingPlayer(meshCollider))
+                    {
+                        yield return new WaitForSeconds(0.15f);
+                    }
+                }
+                if (meshCollider != null)
+                {
+                    SetPlayerCollisionIgnore(meshCollider, false);
+                }
+            }
         }
 
-        /// <summary>
-        /// 바닥에 멈춘 파편을 Kinematic으로 전환하고 원래의 정밀 오목 메쉬 콜라이더로 복원합니다.
-        /// </summary>
+        private static void WakeNearbyFragments(Vector3 worldPoint, float radius)
+        {
+            float wakeRadius = Mathf.Max(radius + 2.0f, 3.0f);
+            Bounds wakeBounds = new Bounds(worldPoint, Vector3.one * (wakeRadius * 2f));
+
+            for (int i = activeFragments.Count - 1; i >= 0; i--)
+            {
+                GameObject go = activeFragments[i];
+                if (go == null) continue;
+                if (go.TryGetComponent<VoxVoxelObject>(out var frag) && frag.meshCollider != null)
+                {
+                    if (wakeBounds.Intersects(frag.meshCollider.bounds))
+                        frag.UnsettleFragment();
+                }
+            }
+        }
+
         public void SettleFragment()
         {
             if (!isFragment || !TryGetComponent<Rigidbody>(out var rb)) return;
@@ -276,37 +629,43 @@ namespace VoxelDestructionPro.Vox
             {
                 meshCollider.sharedMesh = null;
                 meshCollider.convex = false;
-                meshCollider.sharedMesh = meshFilter.sharedMesh;
+                if (meshFilter != null && meshFilter.sharedMesh != null && meshFilter.sharedMesh.vertexCount > 0)
+                    meshCollider.sharedMesh = meshFilter.sharedMesh;
+            }
+
+            if (isPermanentFragment)
+            {
+                if (navModifier != null)
+                    navModifier.ignoreFromBuild = false;
+                RequestNavMeshUpdate();
             }
         }
 
-        /// <summary>
-        /// 피해를 입거나 외부 충격 시 물리 낙하 및 볼록 콜라이더를 재개합니다.
-        /// </summary>
         public void UnsettleFragment()
         {
             if (!isFragment || !TryGetComponent<Rigidbody>(out var rb)) return;
             if (!rb.isKinematic) return;
 
+            if (navModifier != null)
+                navModifier.ignoreFromBuild = true;
+
             if (meshCollider != null)
             {
+                SetPlayerCollisionIgnore(meshCollider, true);
                 meshCollider.sharedMesh = null;
                 meshCollider.convex = true;
-                meshCollider.sharedMesh = meshFilter.sharedMesh;
-                IgnorePlayerCollision(meshCollider);
+                if (meshFilter != null && meshFilter.sharedMesh != null && meshFilter.sharedMesh.vertexCount > 0)
+                    meshCollider.sharedMesh = meshFilter.sharedMesh;
             }
             rb.isKinematic = false;
             rb.WakeUp();
             StartSettlingCheck();
         }
 
-        /// <summary>
-        /// 지정한 월드 좌표 근처에 실제 활성화된 복셀이 존재하는지 검사합니다.
-        /// </summary>
         public bool HasActiveVoxelNear(Vector3 worldPoint, float radius, out Vector3 nearestVoxelPos)
         {
             nearestVoxelPos = worldPoint;
-            if (voxelData == null || voxelData.IsEmpty()) return false;
+            if (voxelData == null || activeVoxelCount <= 0) return false;
 
             float vSize = Mathf.Max(voxelSize, 0.0001f);
             Vector3 local = transform.InverseTransformPoint(worldPoint) / vSize;
@@ -315,8 +674,7 @@ namespace VoxelDestructionPro.Vox
             int cy = Mathf.RoundToInt(local.y);
             int cz = Mathf.RoundToInt(local.z);
 
-            int r = Mathf.CeilToInt(radius / vSize);
-            r = Mathf.Clamp(r, 1, 3);
+            int r = Mathf.Clamp(Mathf.CeilToInt(radius / vSize), 1, 3);
 
             float minDistSq = float.MaxValue;
             bool found = false;
@@ -354,15 +712,12 @@ namespace VoxelDestructionPro.Vox
             return false;
         }
 
-        /// <summary>
-        /// 월드 레이가 실제 활성화된 복셀을 관통하는지 정밀 검사합니다.
-        /// </summary>
         public bool RaycastVoxel(Ray worldRay, float maxDistance, out Vector3 hitPoint, out Vector3Int hitCoord)
         {
             hitPoint = Vector3.zero;
             hitCoord = Vector3Int.zero;
 
-            if (voxelData == null || voxelData.IsEmpty()) return false;
+            if (voxelData == null || activeVoxelCount <= 0) return false;
 
             float vSize = Mathf.Max(voxelSize, 0.0001f);
             Vector3 localOrigin = transform.InverseTransformPoint(worldRay.origin);
@@ -424,28 +779,19 @@ namespace VoxelDestructionPro.Vox
             return true;
         }
 
-        /// <summary>
-        /// 구형 범위의 복셀을 파괴하고 결과를 반환합니다.
-        /// </summary>
         public VoxelDamageResult DamageSphere(Vector3 worldPosition, VoxelDamageArgs args)
         {
             return ExecuteSphereDamage(worldPosition, args);
         }
 
-        /// <summary>
-        /// 구형 범위 파괴 (기존 호환용).
-        /// </summary>
         public bool DestroySphere(Vector3 worldPosition, VoxelDamageArgs args)
         {
             return ExecuteSphereDamage(worldPosition, args).destroyed;
         }
 
-        /// <summary>
-        /// 직육면체(Box) 범위의 복셀을 파괴합니다.
-        /// </summary>
         public VoxelDamageResult DamageBox(Vector3 worldCenter, Vector3 worldHalfExtents, Quaternion worldRotation, VoxelDamageArgs args)
         {
-            if (voxelData == null || voxelData.IsEmpty()) return default;
+            if (voxelData == null || activeVoxelCount <= 0) return default;
 
             float vSize = Mathf.Max(voxelSize, 0.0001f);
             Vector3 ls = transform.lossyScale;
@@ -487,6 +833,7 @@ namespace VoxelDestructionPro.Vox
                             {
                                 v.active = false;
                                 voxelData.SetVoxel(x, y, z, v);
+                                ExpandDirtyBounds(x, y, z);
                                 if (voxelData.palette != null && v.colorIndex < voxelData.palette.Length)
                                     sampleColor = voxelData.palette[v.colorIndex];
                                 count++;
@@ -494,15 +841,16 @@ namespace VoxelDestructionPro.Vox
                         }
                     }
 
-            if (emitDebrisParticles && count > 0)
-                EmitDebrisParticles(worldCenter, sampleColor, Mathf.Clamp(count, 6, 25));
+            if (count > 0)
+            {
+                activeVoxelCount = Mathf.Max(0, activeVoxelCount - count);
+                if (emitDebrisParticles)
+                    EmitDebrisParticles(worldCenter, sampleColor, Mathf.Clamp(count, 6, 25));
+            }
 
-            return FinishDamage(worldCenter, count, args);
+            return QueueDamageCommit(worldCenter, count, args);
         }
 
-        /// <summary>
-        /// 레이(Ray)를 따라 관통하며 복셀을 파괴합니다.
-        /// </summary>
         public VoxelDamageResult DamageRay(Ray ray, float maxDistance, VoxelDamageArgs args)
         {
             int stepCount = Mathf.Max(1, Mathf.CeilToInt(maxDistance / (voxelSize * 0.8f)));
@@ -524,14 +872,11 @@ namespace VoxelDestructionPro.Vox
                 }
             }
 
-            return FinishDamage(firstHit, totalDestroyed, args);
+            return QueueDamageCommit(firstHit, totalDestroyed, args);
         }
 
         private VoxelDamageResult ExecuteSphereDamage(Vector3 worldPosition, VoxelDamageArgs args)
         {
-            if (isFragment)
-                UnsettleFragment();
-
             int destroyed = InternalSphereRemove(worldPosition, args.radius, out Color col);
             if (destroyed == 0)
             {
@@ -562,13 +907,30 @@ namespace VoxelDestructionPro.Vox
             if (emitDebrisParticles && destroyed > 0)
                 EmitDebrisParticles(worldPosition, col, Mathf.Clamp(destroyed * 2, 8, 30));
 
-            return FinishDamage(worldPosition, destroyed, args);
+            return QueueDamageCommit(worldPosition, destroyed, args);
+        }
+
+        private void ExpandDirtyBounds(int x, int y, int z)
+        {
+            if (!hasDirtyBounds)
+            {
+                hasDirtyBounds = true;
+                pendingDirtyMin = new Vector3Int(x, y, z);
+                pendingDirtyMax = new Vector3Int(x, y, z);
+                return;
+            }
+            if (x < pendingDirtyMin.x) pendingDirtyMin.x = x;
+            if (y < pendingDirtyMin.y) pendingDirtyMin.y = y;
+            if (z < pendingDirtyMin.z) pendingDirtyMin.z = z;
+            if (x > pendingDirtyMax.x) pendingDirtyMax.x = x;
+            if (y > pendingDirtyMax.y) pendingDirtyMax.y = y;
+            if (z > pendingDirtyMax.z) pendingDirtyMax.z = z;
         }
 
         private int InternalSphereRemove(Vector3 worldPosition, float radius, out Color lastColor)
         {
             lastColor = Color.white;
-            if (voxelData == null || voxelData.IsEmpty()) return 0;
+            if (voxelData == null || activeVoxelCount <= 0) return 0;
 
             Vector3 localPoint = transform.InverseTransformPoint(worldPosition);
             float vSize = Mathf.Max(voxelSize, 0.0001f);
@@ -605,19 +967,61 @@ namespace VoxelDestructionPro.Vox
 
                         v.active = false;
                         voxelData.SetVoxel(x, y, z, v);
+                        ExpandDirtyBounds(x, y, z);
                         if (voxelData.palette != null && v.colorIndex < voxelData.palette.Length)
                             lastColor = voxelData.palette[v.colorIndex];
                         count++;
                     }
 
+            if (count > 0)
+                activeVoxelCount = Mathf.Max(0, activeVoxelCount - count);
+
             return count;
         }
 
-        private VoxelDamageResult FinishDamage(Vector3 hitPoint, int count, VoxelDamageArgs args)
+        private VoxelDamageResult QueueDamageCommit(Vector3 hitPoint, int count, VoxelDamageArgs args)
         {
             if (count == 0) return default;
 
-            int remaining = voxelData.CountActive();
+            if (!Application.isPlaying)
+            {
+                pendingDestroyedCount = count;
+                pendingHitPoint = hitPoint;
+                pendingArgs = args;
+                return CommitPendingDamage();
+            }
+
+            pendingDestroyedCount += count;
+            pendingHitPoint = hitPoint;
+            pendingArgs = args;
+            hasPendingDamage = true;
+
+            return new VoxelDamageResult
+            {
+                destroyed = true,
+                destroyedCount = count,
+                hitPoint = hitPoint
+            };
+        }
+
+        private VoxelDamageResult CommitPendingDamage()
+        {
+            hasPendingDamage = false;
+            hasDirtyBounds = false;
+            int count = pendingDestroyedCount;
+            Vector3 hitPoint = pendingHitPoint;
+            VoxelDamageArgs args = pendingArgs;
+            Vector3Int dirtyMin = pendingDirtyMin;
+            Vector3Int dirtyMax = pendingDirtyMax;
+            pendingDestroyedCount = 0;
+
+            if (count == 0) return default;
+
+            if (isFragment)
+                UnsettleFragment();
+            WakeNearbyFragments(hitPoint, args.radius);
+
+            int remaining = activeVoxelCount;
             int thresh = isFragment ? 2 : (initialVoxelCount > 0 ? Mathf.Min(collapseThreshold, Mathf.Max(2, initialVoxelCount / 10)) : collapseThreshold);
             float ratio = isFragment ? 0f : collapseRatio;
 
@@ -629,9 +1033,19 @@ namespace VoxelDestructionPro.Vox
 
             PlayDestroyAudio(hitPoint, args);
 
-            if (TryGetComponent<Rigidbody>(out var myRb))
+            int spawnedFragments = 0;
+            if (args.isolateFragments)
+                spawnedFragments = IsolateFragments(hitPoint, args, dirtyMin, dirtyMax);
+
+            if (activeVoxelCount <= thresh)
             {
-                myRb.mass = Mathf.Clamp(remaining * 0.25f, 0.5f, 50f);
+                TriggerCollapse(hitPoint, args);
+                return new VoxelDamageResult { destroyed = true, destroyedCount = count + activeVoxelCount, spawnedFragmentsCount = spawnedFragments, hitPoint = hitPoint };
+            }
+
+            if (TryGetComponent<Rigidbody>(out var myRb) && !myRb.isKinematic)
+            {
+                myRb.mass = Mathf.Clamp(activeVoxelCount * 0.25f, 0.5f, 50f);
                 if (args.explosionForce > 0f)
                 {
                     Vector3 push = args.impactDirection != Vector3.zero ? args.impactDirection : (transform.position - hitPoint).normalized;
@@ -639,12 +1053,7 @@ namespace VoxelDestructionPro.Vox
                 }
             }
 
-            int spawnedFragments = 0;
-            if (args.isolateFragments)
-                spawnedFragments = IsolateFragments(hitPoint, args);
-
             RebuildMesh();
-            WakeNearbyFragments(hitPoint, args.radius + voxelSize * 4f);
 
             VoxelDamageResult result = new VoxelDamageResult
             {
@@ -664,27 +1073,10 @@ namespace VoxelDestructionPro.Vox
                 EmitDebrisParticles(transform.position, Color.gray, isFragment ? 15 : 30);
 
             PlayDestroyAudio(hitPoint, args);
-            WakeNearbyFragments(transform.position, Mathf.Max(voxelSize * 10f, 5f));
+            if (meshFilter != null) meshFilter.sharedMesh = null;
+            if (meshCollider != null) meshCollider.sharedMesh = null;
+            RequestNavMeshUpdate();
             Destroy(gameObject);
-        }
-
-        private static void WakeNearbyFragments(Vector3 center, float radius)
-        {
-            float rSq = radius * radius;
-            for (int i = activeFragments.Count - 1; i >= 0; i--)
-            {
-                var fragGo = activeFragments[i];
-                if (fragGo == null)
-                {
-                    activeFragments.RemoveAt(i);
-                    continue;
-                }
-                if ((fragGo.transform.position - center).sqrMagnitude <= rSq)
-                {
-                    if (fragGo.TryGetComponent<VoxVoxelObject>(out var frag))
-                        frag.UnsettleFragment();
-                }
-            }
         }
 
         private void PlayDestroyAudio(Vector3 worldPos, VoxelDamageArgs args)
@@ -692,6 +1084,15 @@ namespace VoxelDestructionPro.Vox
             AudioClip clip = args.customClip != null ? args.customClip : defaultDestroyClip;
             if (clip == null) return;
             float vol = args.soundVolume > 0 ? args.soundVolume : destroyVolume;
+
+            if (AudioManager.Instance != null)
+            {
+                if (playSoundAtHitPoint)
+                    AudioManager.Instance.PlaySFXAt(clip, worldPos, vol);
+                else
+                    AudioManager.Instance.PlaySFX2D(clip, vol);
+                return;
+            }
 
             if (playSoundAtHitPoint)
                 AudioSource.PlayClipAtPoint(clip, worldPos, vol);
@@ -816,9 +1217,33 @@ namespace VoxelDestructionPro.Vox
             public bool isGrounded;
         }
 
-        private int IsolateFragments(Vector3 damageCenter, VoxelDamageArgs args)
+        private static List<int> RentClusterList()
         {
-            if (voxelData == null || voxelData.IsEmpty()) return 0;
+            if (s_ClusterListPool.Count > 0)
+            {
+                var list = s_ClusterListPool.Pop();
+                list.Clear();
+                return list;
+            }
+            return new List<int>(64);
+        }
+
+        private static void ReleaseClusters()
+        {
+            for (int i = 0; i < s_Clusters.Count; i++)
+            {
+                if (s_Clusters[i].voxels != null)
+                {
+                    s_Clusters[i].voxels.Clear();
+                    s_ClusterListPool.Push(s_Clusters[i].voxels);
+                }
+            }
+            s_Clusters.Clear();
+        }
+
+        private int IsolateFragments(Vector3 damageCenter, VoxelDamageArgs args, Vector3Int dirtyMin, Vector3Int dirtyMax)
+        {
+            if (voxelData == null || activeVoxelCount <= 0) return 0;
 
             int vol = voxelData.Volume;
             if (visitedBuffer == null || visitedBuffer.Length < vol)
@@ -831,24 +1256,18 @@ namespace VoxelDestructionPro.Vox
                 currentRunId = 1;
             }
 
-            List<ClusterData> clusters = new List<ClusterData>();
-
-            Vector3 localCenter = transform.InverseTransformPoint(damageCenter);
-            float vSize = Mathf.Max(voxelSize, 0.0001f);
-            Vector3 centerVox = localCenter / vSize;
-            Vector3 ls = transform.lossyScale;
-            float scaleMax = Mathf.Max(Mathf.Abs(ls.x), Mathf.Abs(ls.y), Mathf.Abs(ls.z), 0.0001f);
-            float scanRadiusVox = (args.radius / (vSize * scaleMax)) + 2f;
+            ReleaseClusters();
+            s_FragmentsToSpawn.Clear();
 
             Vector3Int searchMin = new Vector3Int(
-                Mathf.Max(0, Mathf.FloorToInt(centerVox.x - scanRadiusVox)),
-                Mathf.Max(0, Mathf.FloorToInt(centerVox.y - scanRadiusVox)),
-                Mathf.Max(0, Mathf.FloorToInt(centerVox.z - scanRadiusVox))
+                Mathf.Max(0, dirtyMin.x - 2),
+                Mathf.Max(0, dirtyMin.y - 2),
+                Mathf.Max(0, dirtyMin.z - 2)
             );
             Vector3Int searchMax = new Vector3Int(
-                Mathf.Min(voxelData.length.x - 1, Mathf.CeilToInt(centerVox.x + scanRadiusVox)),
-                Mathf.Min(voxelData.length.y - 1, Mathf.CeilToInt(centerVox.y + scanRadiusVox)),
-                Mathf.Min(voxelData.length.z - 1, Mathf.CeilToInt(centerVox.z + scanRadiusVox))
+                Mathf.Min(voxelData.length.x - 1, dirtyMax.x + 2),
+                Mathf.Min(voxelData.length.y - 1, dirtyMax.y + 2),
+                Mathf.Min(voxelData.length.z - 1, dirtyMax.z + 2)
             );
 
             for (int z = searchMin.z; z <= searchMax.z; z++)
@@ -858,46 +1277,52 @@ namespace VoxelDestructionPro.Vox
                         int idx = voxelData.ToIndex(x, y, z);
                         if (visitedBuffer[idx] == currentRunId || !voxelData.voxels[idx].active) continue;
                         ClusterData cluster = FloodFill(idx);
-                        clusters.Add(cluster);
+                        s_Clusters.Add(cluster);
                     }
 
-            if (clusters.Count <= 1) return 0;
-
-            List<int> fragmentsToSpawn = new List<int>();
+            if (s_Clusters.Count <= 1)
+            {
+                ReleaseClusters();
+                return 0;
+            }
 
             if (anchorToGround && !isFragment)
             {
                 bool hasGrounded = false;
-                for (int i = 0; i < clusters.Count; i++)
+                for (int i = 0; i < s_Clusters.Count; i++)
                 {
-                    if (clusters[i].isGrounded)
+                    if (s_Clusters[i].isGrounded)
                         hasGrounded = true;
                     else
-                        fragmentsToSpawn.Add(i);
+                        s_FragmentsToSpawn.Add(i);
                 }
 
                 if (!hasGrounded)
                 {
-                    fragmentsToSpawn.Clear();
+                    s_FragmentsToSpawn.Clear();
                     int largestIdx = 0;
-                    for (int i = 1; i < clusters.Count; i++)
-                        if (clusters[i].voxels.Count > clusters[largestIdx].voxels.Count) largestIdx = i;
+                    for (int i = 1; i < s_Clusters.Count; i++)
+                        if (s_Clusters[i].voxels.Count > s_Clusters[largestIdx].voxels.Count) largestIdx = i;
 
-                    for (int i = 0; i < clusters.Count; i++)
-                        if (i != largestIdx) fragmentsToSpawn.Add(i);
+                    for (int i = 0; i < s_Clusters.Count; i++)
+                        if (i != largestIdx) s_FragmentsToSpawn.Add(i);
                 }
             }
             else
             {
                 int largestIdx = 0;
-                for (int i = 1; i < clusters.Count; i++)
-                    if (clusters[i].voxels.Count > clusters[largestIdx].voxels.Count) largestIdx = i;
+                for (int i = 1; i < s_Clusters.Count; i++)
+                    if (s_Clusters[i].voxels.Count > s_Clusters[largestIdx].voxels.Count) largestIdx = i;
 
-                for (int i = 0; i < clusters.Count; i++)
-                    if (i != largestIdx) fragmentsToSpawn.Add(i);
+                for (int i = 0; i < s_Clusters.Count; i++)
+                    if (i != largestIdx) s_FragmentsToSpawn.Add(i);
             }
 
-            if (fragmentsToSpawn.Count == 0) return 0;
+            if (s_FragmentsToSpawn.Count == 0)
+            {
+                ReleaseClusters();
+                return 0;
+            }
 
             int spawned = 0;
             int permMin = permanentFragmentMinSize;
@@ -906,12 +1331,12 @@ namespace VoxelDestructionPro.Vox
 
             int minSize = isFragment ? 2 : (initialVoxelCount > 0 ? Mathf.Min(minClusterSize, Mathf.Max(1, initialVoxelCount / 15)) : minClusterSize);
 
-            foreach (int idx in fragmentsToSpawn)
+            for (int f = 0; f < s_FragmentsToSpawn.Count; f++)
             {
-                if (spawned >= maxFragmentsPerCall) break;
-                List<int> clusterVoxels = clusters[idx].voxels;
+                int idx = s_FragmentsToSpawn[f];
+                List<int> clusterVoxels = s_Clusters[idx].voxels;
 
-                if (clusterVoxels.Count >= minSize)
+                if (spawned < maxFragmentsPerCall && clusterVoxels.Count >= minSize)
                 {
                     VoxVoxelData fragData = ExtractCluster(clusterVoxels, out Vector3 offset);
                     if (fragData != null)
@@ -930,47 +1355,74 @@ namespace VoxelDestructionPro.Vox
                     if (fragData != null && emitDebrisParticles)
                     {
                         Vector3 wPos = transform.TransformPoint(offset * voxelSize);
-                        EmitDebrisParticles(wPos, Color.gray, clusterVoxels.Count * 2);
+                        EmitDebrisParticles(wPos, Color.gray, Mathf.Clamp(clusterVoxels.Count * 2, 4, 20));
                     }
                 }
             }
 
+            ReleaseClusters();
             return spawned;
         }
 
         private ClusterData FloodFill(int startIdx)
         {
-            ClusterData cluster = new ClusterData { voxels = new List<int>(), isGrounded = false };
+            ClusterData cluster = new ClusterData { voxels = RentClusterList(), isGrounded = false };
             s_BfsQueue.Clear();
             s_BfsQueue.Enqueue(startIdx);
             visitedBuffer[startIdx] = currentRunId;
+
+            int lx = voxelData.length.x;
+            int ly = voxelData.length.y;
+            int lz = voxelData.length.z;
+            int strideZ = lx * ly;
+            VoxVoxel[] voxArr = voxelData.voxels;
+            int runId = currentRunId;
 
             while (s_BfsQueue.Count > 0)
             {
                 int cur = s_BfsQueue.Dequeue();
                 cluster.voxels.Add(cur);
-                voxelData.ToCoords(cur, out int x, out int y, out int z);
+
+                int x = cur % lx;
+                int yIdx = cur / lx;
+                int y = yIdx % ly;
+                int z = yIdx / ly;
 
                 if (anchorToGround && y <= groundAnchorY)
                     cluster.isGrounded = true;
 
-                EnqueueIfActive(s_BfsQueue, x + 1, y, z);
-                EnqueueIfActive(s_BfsQueue, x - 1, y, z);
-                EnqueueIfActive(s_BfsQueue, x, y + 1, z);
-                EnqueueIfActive(s_BfsQueue, x, y - 1, z);
-                EnqueueIfActive(s_BfsQueue, x, y, z + 1);
-                EnqueueIfActive(s_BfsQueue, x, y, z - 1);
+                if (x + 1 < lx)
+                {
+                    int n = cur + 1;
+                    if (visitedBuffer[n] != runId && voxArr[n].active) { visitedBuffer[n] = runId; s_BfsQueue.Enqueue(n); }
+                }
+                if (x > 0)
+                {
+                    int n = cur - 1;
+                    if (visitedBuffer[n] != runId && voxArr[n].active) { visitedBuffer[n] = runId; s_BfsQueue.Enqueue(n); }
+                }
+                if (y + 1 < ly)
+                {
+                    int n = cur + lx;
+                    if (visitedBuffer[n] != runId && voxArr[n].active) { visitedBuffer[n] = runId; s_BfsQueue.Enqueue(n); }
+                }
+                if (y > 0)
+                {
+                    int n = cur - lx;
+                    if (visitedBuffer[n] != runId && voxArr[n].active) { visitedBuffer[n] = runId; s_BfsQueue.Enqueue(n); }
+                }
+                if (z + 1 < lz)
+                {
+                    int n = cur + strideZ;
+                    if (visitedBuffer[n] != runId && voxArr[n].active) { visitedBuffer[n] = runId; s_BfsQueue.Enqueue(n); }
+                }
+                if (z > 0)
+                {
+                    int n = cur - strideZ;
+                    if (visitedBuffer[n] != runId && voxArr[n].active) { visitedBuffer[n] = runId; s_BfsQueue.Enqueue(n); }
+                }
             }
             return cluster;
-        }
-
-        private void EnqueueIfActive(Queue<int> q, int x, int y, int z)
-        {
-            if (!voxelData.InBounds(x, y, z)) return;
-            int idx = voxelData.ToIndex(x, y, z);
-            if (visitedBuffer[idx] == currentRunId || !voxelData.voxels[idx].active) return;
-            visitedBuffer[idx] = currentRunId;
-            q.Enqueue(idx);
         }
 
         private VoxVoxelData ExtractCluster(List<int> cluster, out Vector3 offset)
@@ -984,8 +1436,12 @@ namespace VoxelDestructionPro.Vox
             for (int i = 0; i < cluster.Count; i++)
             {
                 voxelData.ToCoords(cluster[i], out int x, out int y, out int z);
-                min = Vector3Int.Min(min, new Vector3Int(x, y, z));
-                max = Vector3Int.Max(max, new Vector3Int(x, y, z));
+                if (x < min.x) min.x = x;
+                if (y < min.y) min.y = y;
+                if (z < min.z) min.z = z;
+                if (x > max.x) max.x = x;
+                if (y > max.y) max.y = y;
+                if (z > max.z) max.z = z;
             }
 
             Vector3Int size = max - min + Vector3Int.one;
@@ -1003,6 +1459,7 @@ namespace VoxelDestructionPro.Vox
                 voxelData.SetVoxel(x, y, z, empty);
             }
 
+            activeVoxelCount = Mathf.Max(0, activeVoxelCount - cluster.Count);
             offset = new Vector3(min.x, min.y, min.z);
             return new VoxVoxelData(voxels, voxelData.palette, size);
         }
@@ -1010,6 +1467,12 @@ namespace VoxelDestructionPro.Vox
         private void EnforceGlobalFragmentLimit()
         {
             if (maxGlobalFragments <= 0) return;
+            for (int i = activeFragments.Count - 1; i >= 0; i--)
+            {
+                if (activeFragments[i] == null)
+                    activeFragments.RemoveAt(i);
+            }
+
             while (activeFragments.Count >= maxGlobalFragments)
             {
                 GameObject oldest = activeFragments[0];
@@ -1030,6 +1493,8 @@ namespace VoxelDestructionPro.Vox
                 s_FragmentRoot = rootGo.transform;
             }
 
+            bool isPermanent = lifetime <= 0f;
+
             GameObject go = new GameObject("VoxFragment");
             activeFragments.Add(go);
             go.layer = gameObject.layer;
@@ -1039,16 +1504,24 @@ namespace VoxelDestructionPro.Vox
             go.transform.rotation = transform.rotation;
             go.transform.localScale = transform.lossyScale;
 
+            NavMeshModifier mod = go.AddComponent<NavMeshModifier>();
+            mod.ignoreFromBuild = true;
+            mod.overrideArea = true;
+            mod.area = 1;
+
             Rigidbody rb = go.AddComponent<Rigidbody>();
             rb.interpolation = RigidbodyInterpolation.Interpolate;
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
 
             MeshCollider mc = go.AddComponent<MeshCollider>();
+            mc.cookingOptions = FastCookingOptions;
             mc.convex = true;
-            IgnorePlayerCollision(mc);
+            SetPlayerCollisionIgnore(mc, true);
 
             VoxVoxelObject frag = go.AddComponent<VoxVoxelObject>();
+            frag.navModifier = mod;
             frag.isFragment = true;
+            frag.isPermanentFragment = isPermanent;
             frag.collapseThreshold = 2;
             frag.collapseRatio = 0f;
             frag.CopySettingsFrom(this);
