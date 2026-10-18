@@ -45,7 +45,7 @@ public class PlayerStamina : MonoBehaviour
 
     public bool UseStamina(float amount)
     {
-        if (CurrentStamina <= 0f) return false;
+        if (CurrentStamina <= 0f || CurrentStamina < amount) return false;
 
         CurrentStamina = Mathf.Max(0f, CurrentStamina - amount);
         regenDelayTimer = regenDelay;
