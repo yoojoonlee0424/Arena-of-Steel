@@ -17,6 +17,9 @@ namespace VoxelDestructionPro.Vox
         [Header("Destruction")]
         [Tooltip("Destruction radius in world units.")]
         public float destructionRadius = 2f;
+        public float damage = 25f;
+        [Range(0f, 1f)]
+        public float distanceFalloff = 0f;
 
         [Tooltip("If true, isolates loose fragments with physics.")]
         public bool autoIsolateFragments = true;
@@ -76,6 +79,8 @@ namespace VoxelDestructionPro.Vox
             VoxelDamageArgs args = new VoxelDamageArgs
             {
                 radius = destructionRadius,
+                damage = damage,
+                distanceFalloff = distanceFalloff,
                 isolateFragments = autoIsolateFragments,
                 explosionForce = explosionForce,
                 fragmentLifetime = 8f,

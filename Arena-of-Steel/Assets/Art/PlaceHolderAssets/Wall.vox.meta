@@ -1,7 +1,21 @@
 fileFormatVersion: 2
 guid: f1c7c79f90402644b8d3fbb4ed80e09a
-DefaultImporter:
+ScriptedImporter:
+  internalIDToNameTable: []
   externalObjects: {}
+  serializedVersion: 2
   userData: 
   assetBundleName: 
   assetBundleVariant: 
+  script: {fileID: 11500000, guid: 851f9f3fea384884eaa0adde0018a04e, type: 3}
+  swapYZ: 1
+  trimEmptySpace: 1
+  downsample: 6
+  preserveScaleOnDownsample: 1
+  voxelSize: 0.1
+  voxelMaxHealth: 20
+  forceRadiusInVoxels: 0
+  maxChunkSize: 32
+  vertexColorMaterial: {instanceID: 0}
+  defaultDestroyClip: {instanceID: 0}
+  anchorToGround: 1

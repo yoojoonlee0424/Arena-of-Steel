@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -10,7 +9,7 @@ namespace VoxelDestructionPro.Vox
     {
         public bool active;
         public int colorIndex;
-        public int normal;
+        [NonSerialized] public int normal;
 
         public VoxVoxel(bool active, int colorIndex)
         {
@@ -28,6 +27,10 @@ namespace VoxelDestructionPro.Vox
     public struct VoxelDamageArgs
     {
         public float radius;
+        public float damage;
+        [Range(0f, 1f)]
+        public float distanceFalloff;
+        public bool radiusInVoxels;
         public bool isolateFragments;
         public float explosionForce;
         public float fragmentLifetime;
@@ -38,6 +41,9 @@ namespace VoxelDestructionPro.Vox
         public static VoxelDamageArgs Default => new VoxelDamageArgs
         {
             radius = 1.5f,
+            damage = 20f,
+            distanceFalloff = 0f,
+            radiusInVoxels = false,
             isolateFragments = true,
             explosionForce = 3f,
             fragmentLifetime = 8f,
@@ -51,8 +57,20 @@ namespace VoxelDestructionPro.Vox
     {
         public bool destroyed;
         public int destroyedCount;
+        public int damagedCount;
         public int spawnedFragmentsCount;
         public Vector3 hitPoint;
+    }
+
+    [Serializable]
+    public struct VoxSubChunk
+    {
+        public Vector3Int min;
+        public Vector3Int max;
+        public MeshFilter meshFilter;
+        public MeshRenderer meshRenderer;
+        public MeshCollider meshCollider;
+        [NonSerialized] public Mesh runtimeMesh;
     }
 
     [Serializable]
@@ -156,30 +174,19 @@ namespace VoxelDestructionPro.Vox
             return new VoxVoxelData(v, pal, size);
         }
 
-        public static VoxVoxelData FromVox(int sizeX, int sizeY, int sizeZ, VoxVoxLoader.VoxVoxel[] xyzis, Color32[] palette256)
+        public bool HasActiveInBounds(Vector3Int min, Vector3Int max)
         {
-            if (sizeX <= 0 || sizeY <= 0 || sizeZ <= 0) return null;
-            Vector3Int size = new Vector3Int(sizeX, sizeZ, sizeY);
-            Color32[] pal = palette256 != null && palette256.Length == 256 ? palette256 : VoxVoxLoader.GetDefaultPalette256();
-
-            Color[] palette = new Color[256];
-            for (int i = 0; i < 256; i++)
-                palette[i] = new Color(pal[i].r / 255f, pal[i].g / 255f, pal[i].b / 255f, 1f);
-
-            VoxVoxel[] voxels = new VoxVoxel[size.x * size.y * size.z];
-            if (xyzis != null)
-            {
-                for (int i = 0; i < xyzis.Length; i++)
+            if (voxels == null) return false;
+            int sx = Mathf.Max(0, min.x), sy = Mathf.Max(0, min.y), sz = Mathf.Max(0, min.z);
+            int ex = Mathf.Min(length.x, max.x), ey = Mathf.Min(length.y, max.y), ez = Mathf.Min(length.z, max.z);
+            for (int z = sz; z < ez; z++)
+                for (int y = sy; y < ey; y++)
                 {
-                    int x = xyzis[i].x;
-                    int y = xyzis[i].z;
-                    int z = xyzis[i].y;
-                    if (x < 0 || y < 0 || z < 0 || x >= size.x || y >= size.y || z >= size.z) continue;
-                    int paletteIndex = Mathf.Clamp(xyzis[i].colorIndex - 1, 0, 255);
-                    voxels[x + size.x * (y + size.y * z)] = new VoxVoxel(true, paletteIndex);
+                    int row = length.x * (y + length.y * z);
+                    for (int x = sx; x < ex; x++)
+                        if (voxels[row + x].active) return true;
                 }
-            }
-            return new VoxVoxelData(voxels, palette, size);
+            return false;
         }
     }
 
@@ -198,6 +205,12 @@ namespace VoxelDestructionPro.Vox
 
         public static Mesh BuildMesh(VoxVoxelData data, float voxelSize, Mesh targetMesh = null)
         {
+            Vector3Int max = data != null ? data.length : Vector3Int.zero;
+            return BuildChunkMesh(data, Vector3Int.zero, max, voxelSize, targetMesh);
+        }
+
+        public static Mesh BuildChunkMesh(VoxVoxelData data, Vector3Int min, Vector3Int max, float voxelSize, Mesh targetMesh = null)
+        {
             Mesh mesh;
             if (targetMesh != null)
             {
@@ -213,14 +226,18 @@ namespace VoxelDestructionPro.Vox
             if (data == null || data.voxels == null || data.voxels.Length == 0)
                 return mesh;
 
+            min = Vector3Int.Max(Vector3Int.zero, min);
+            max = Vector3Int.Min(data.length, max);
+            s_Dims[0] = max.x - min.x;
+            s_Dims[1] = max.y - min.y;
+            s_Dims[2] = max.z - min.z;
+            if (s_Dims[0] <= 0 || s_Dims[1] <= 0 || s_Dims[2] <= 0)
+                return mesh;
+
             s_Vertices.Clear();
             s_Triangles.Clear();
             s_Normals.Clear();
             s_Colors.Clear();
-
-            s_Dims[0] = data.length.x;
-            s_Dims[1] = data.length.y;
-            s_Dims[2] = data.length.z;
 
             int maxMaskSize = Mathf.Max(s_Dims[0] * s_Dims[1], s_Dims[1] * s_Dims[2], s_Dims[0] * s_Dims[2]);
             if (s_MaskBuffer == null || s_MaskBuffer.Length < maxMaskSize)
@@ -228,7 +245,7 @@ namespace VoxelDestructionPro.Vox
 
             VoxVoxel[] mask = s_MaskBuffer;
             VoxVoxel empty = new VoxVoxel(false, 0);
-            Vector3 blockMinVertex = new Vector3(-0.5f, -0.5f, -0.5f);
+            Vector3 blockMinVertex = new Vector3(min.x - 0.5f, min.y - 0.5f, min.z - 0.5f);
             int lenX = data.length.x;
             int lenY = data.length.y;
 
@@ -247,24 +264,31 @@ namespace VoxelDestructionPro.Vox
                 for (s_X[d] = -1; s_X[d] < dimD;)
                 {
                     int n = 0;
+                    bool curInChunk = s_X[d] >= 0;
+                    bool cmpInChunk = s_X[d] < dimD - 1;
+
                     for (s_X[v] = 0; s_X[v] < dimV; ++s_X[v])
                     {
                         for (s_X[u] = 0; s_X[u] < dimU; ++s_X[u])
                         {
-                            VoxVoxel current = s_X[d] >= 0 ? data.voxels[s_X[0] + lenX * (s_X[1] + lenY * s_X[2])] : empty;
-                            VoxVoxel compare = s_X[d] < dimD - 1 ? data.voxels[s_X[0] + s_Q[0] + lenX * (s_X[1] + s_Q[1] + lenY * (s_X[2] + s_Q[2]))] : empty;
+                            int gx = min.x + s_X[0];
+                            int gy = min.y + s_X[1];
+                            int gz = min.z + s_X[2];
+
+                            VoxVoxel current = curInChunk ? data.voxels[gx + lenX * (gy + lenY * gz)] : data.GetVoxel(gx, gy, gz);
+                            VoxVoxel compare = cmpInChunk ? data.voxels[gx + s_Q[0] + lenX * (gy + s_Q[1] + lenY * (gz + s_Q[2]))] : data.GetVoxel(gx + s_Q[0], gy + s_Q[1], gz + s_Q[2]);
 
                             if (current.active == compare.active)
                                 mask[n++] = empty;
                             else if (!current.active)
                             {
-                                compare.normal = 1;
-                                mask[n++] = compare;
+                                if (cmpInChunk) { compare.normal = 1; mask[n++] = compare; }
+                                else mask[n++] = empty;
                             }
                             else
                             {
-                                current.normal = 2;
-                                mask[n++] = current;
+                                if (curInChunk) { current.normal = 2; mask[n++] = current; }
+                                else mask[n++] = empty;
                             }
                         }
                     }
@@ -360,114 +384,6 @@ namespace VoxelDestructionPro.Vox
 
             Vector3 norm = axisMask * -normal;
             norms.Add(norm); norms.Add(norm); norms.Add(norm); norms.Add(norm);
-        }
-    }
-
-    public static class VoxVoxLoader
-    {
-        [Serializable]
-        public struct VoxVoxel
-        {
-            public byte x, y, z, colorIndex;
-        }
-
-        private struct VoxModel
-        {
-            public int sizeX, sizeY, sizeZ;
-            public VoxVoxel[] voxels;
-            public Color32[] palette256;
-        }
-
-        public static VoxVoxelData LoadFromFile(string pathInProject, bool log = false)
-        {
-            if (string.IsNullOrWhiteSpace(pathInProject)) return null;
-            string fullPath = GetFullProjectPath(pathInProject);
-            if (!File.Exists(fullPath))
-            {
-                if (log) Debug.LogWarning("Vox file not found at: " + fullPath);
-                return null;
-            }
-
-            try
-            {
-                using var fs = File.OpenRead(fullPath);
-                VoxModel model = ReadVoxFirstModel(fs);
-                if (model.sizeX <= 0 || model.sizeY <= 0 || model.sizeZ <= 0 || model.voxels == null) return null;
-                return VoxVoxelData.FromVox(model.sizeX, model.sizeY, model.sizeZ, model.voxels, model.palette256);
-            }
-            catch (Exception e)
-            {
-                if (log) Debug.LogError("VoxLoader Exception: " + e.Message);
-                return null;
-            }
-        }
-
-        private static VoxModel ReadVoxFirstModel(Stream stream)
-        {
-            VoxModel model = new VoxModel();
-            using var br = new BinaryReader(stream);
-            if (new string(br.ReadChars(4)) != "VOX ") throw new Exception("Not a VOX file");
-            br.ReadInt32();
-            if (new string(br.ReadChars(4)) != "MAIN") throw new Exception("VOX missing MAIN");
-
-            int mainContent = br.ReadInt32();
-            int mainChildren = br.ReadInt32();
-            if (mainContent > 0) br.ReadBytes(mainContent);
-            long mainEnd = br.BaseStream.Position + mainChildren;
-
-            while (br.BaseStream.Position < mainEnd)
-            {
-                string id = new string(br.ReadChars(4));
-                int contentSize = br.ReadInt32();
-                int childrenSize = br.ReadInt32();
-                long contentStart = br.BaseStream.Position;
-
-                if (id == "SIZE")
-                {
-                    model.sizeX = br.ReadInt32();
-                    model.sizeY = br.ReadInt32();
-                    model.sizeZ = br.ReadInt32();
-                }
-                else if (id == "XYZI")
-                {
-                    int n = br.ReadInt32();
-                    model.voxels = new VoxVoxel[n];
-                    for (int i = 0; i < n; i++)
-                    {
-                        model.voxels[i].x = br.ReadByte();
-                        model.voxels[i].y = br.ReadByte();
-                        model.voxels[i].z = br.ReadByte();
-                        model.voxels[i].colorIndex = br.ReadByte();
-                    }
-                }
-                else if (id == "RGBA")
-                {
-                    Color32[] pal = new Color32[256];
-                    for (int i = 0; i < 256; i++)
-                        pal[i] = new Color32(br.ReadByte(), br.ReadByte(), br.ReadByte(), br.ReadByte());
-                    model.palette256 = pal;
-                }
-
-                long toSkip = contentSize - (br.BaseStream.Position - contentStart);
-                if (toSkip > 0) br.ReadBytes((int)toSkip);
-                if (childrenSize > 0) br.ReadBytes(childrenSize);
-            }
-            return model;
-        }
-
-        public static Color32[] GetDefaultPalette256()
-        {
-            Color32[] p = new Color32[256];
-            for (int i = 1; i < 256; i++) p[i] = new Color32((byte)i, (byte)i, (byte)i, 255);
-            return p;
-        }
-
-        private static string GetFullProjectPath(string pathInProject)
-        {
-            string p = pathInProject.Replace('\\', '/').Trim();
-            if (!p.EndsWith(".vox", StringComparison.OrdinalIgnoreCase)) p += ".vox";
-            if (!p.StartsWith("Assets/")) p = "Assets/" + p.TrimStart('/');
-            return Path.Combine(Application.dataPath, p.Substring("Assets/".Length));
         }
     }
 }

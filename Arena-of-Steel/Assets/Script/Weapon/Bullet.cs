@@ -13,6 +13,9 @@ public class Bullet : MonoBehaviour
     [Header("Voxel Destruction Settings")]
     public bool enableVoxelDamage = true;
     public float explosionRadius = 1.2f;
+    [Range(0f, 1f)]
+    [Tooltip("거리 감쇠율 (0 = 일반 탄환/감쇠 없음, 0~1 = 폭발형 외곽 데미지 감쇠 비율)")]
+    public float distanceFalloff = 0f;
     public float explosionForce = 3.5f;
     public bool isolateFragments = true;
     public float fragmentLifetime = 6f;
@@ -20,20 +23,23 @@ public class Bullet : MonoBehaviour
     private Rigidbody rb;
     private Collider bulletCollider;
     private GameObject shooter;
+    private Vector3 flightDir;
     private bool hasHit = false;
 
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
         bulletCollider = GetComponent<Collider>();
+        flightDir = -transform.right.normalized;
     }
 
     void Start()
     {
+        flightDir = -transform.right.normalized;
         if (rb != null)
         {
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-            rb.linearVelocity = -transform.right * speed;
+            rb.linearVelocity = flightDir * speed;
         }
         Destroy(gameObject, lifeTime);
     }
@@ -42,13 +48,14 @@ public class Bullet : MonoBehaviour
     {
         damage = newDamage;
         shooter = newShooter;
+        flightDir = -transform.right.normalized;
 
         if (newSpeed > 0f)
         {
             speed = newSpeed;
             if (rb != null)
             {
-                rb.linearVelocity = -transform.right * speed;
+                rb.linearVelocity = flightDir * speed;
             }
         }
 
@@ -70,7 +77,7 @@ public class Bullet : MonoBehaviour
 
         if (HitVoxel(collision, contactPoint)) return;
 
-        OnHit(collision.gameObject, contactPoint);
+        OnHit(collision.gameObject, contactPoint, null, collision.collider);
     }
 
     private bool CanIgnoreCollision(Collision collision)
@@ -114,35 +121,32 @@ public class Bullet : MonoBehaviour
         VoxVoxelObject vox = collision.gameObject.GetComponentInParent<VoxVoxelObject>();
         if (vox == null) return false;
 
-        if (vox.HasActiveVoxelNear(contactPoint, vox.VoxelSize * 1.5f, out Vector3 nearestVoxel))
+        Vector3 dir = flightDir != Vector3.zero ? flightDir : -transform.right.normalized;
+        if (vox.HasActiveVoxelNear(contactPoint, vox.VoxelSize * 2f, out Vector3 nearestVoxel))
         {
-            OnHit(collision.gameObject, nearestVoxel, vox);
+            OnHit(collision.gameObject, nearestVoxel, vox, collision.collider);
             return true;
         }
 
-        Vector3 flightDir = -transform.right.normalized;
-        Ray ray = new Ray(transform.position - flightDir * 1.5f, flightDir);
+        Ray ray = new Ray(transform.position - dir * 1.5f, dir);
         if (vox.RaycastVoxel(ray, 4f, out Vector3 rayHit, out _))
         {
-            OnHit(collision.gameObject, rayHit, vox);
+            OnHit(collision.gameObject, rayHit, vox, collision.collider);
             return true;
         }
 
-        if (bulletCollider != null && collision.collider != null)
-        {
-            Physics.IgnoreCollision(bulletCollider, collision.collider, true);
-        }
+        OnHit(collision.gameObject, contactPoint, vox, collision.collider);
         return true;
     }
 
-    private void OnHit(GameObject target, Vector3 point, VoxVoxelObject vox = null)
+    private void OnHit(GameObject target, Vector3 point, VoxVoxelObject vox = null, Collider hitCollider = null)
     {
         if (hasHit) return;
 
         DamageTarget(target);
         DamageVoxel(target, point, vox);
         SpawnHitEffect(point);
-        HandlePierce();
+        HandlePierce(hitCollider);
     }
 
     private void DamageTarget(GameObject target)
@@ -167,13 +171,16 @@ public class Bullet : MonoBehaviour
         if (vox == null) vox = target.GetComponentInParent<VoxVoxelObject>();
         if (vox != null)
         {
+            Vector3 dir = flightDir != Vector3.zero ? flightDir : -transform.right.normalized;
             vox.DamageSphere(point, new VoxelDamageArgs
             {
                 radius = explosionRadius,
+                damage = damage,
+                distanceFalloff = distanceFalloff,
                 isolateFragments = isolateFragments,
                 explosionForce = explosionForce,
                 fragmentLifetime = fragmentLifetime,
-                impactDirection = -transform.right.normalized
+                impactDirection = dir
             });
         }
     }
@@ -186,11 +193,15 @@ public class Bullet : MonoBehaviour
         }
     }
 
-    private void HandlePierce()
+    private void HandlePierce(Collider hitCollider)
     {
         if (pierceCount > 0)
         {
             pierceCount--;
+            if (bulletCollider != null && hitCollider != null)
+                Physics.IgnoreCollision(bulletCollider, hitCollider, true);
+            if (rb != null && flightDir != Vector3.zero)
+                rb.linearVelocity = flightDir * speed;
         }
         else
         {
