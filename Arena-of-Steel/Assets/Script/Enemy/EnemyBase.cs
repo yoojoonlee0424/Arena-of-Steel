@@ -7,7 +7,12 @@ using UnityEngine.AI;
 public abstract class EnemyBase : MonoBehaviour
 {
     public static event Action<EnemyBase> OnAnyEnemyDied;
+    public static event Action<EnemyBase> OnBossSpawned;
+    public static event Action<EnemyBase> OnBossDied;
+    public static event Action<int, int> OnBossHealthChanged;
     public event Action OnDeath;
+
+    public bool IsBoss => enemyData != null && enemyData.isBoss;
 
     [Header("Enemy Stats")]
     public EnemyData enemyData;
@@ -38,6 +43,11 @@ public abstract class EnemyBase : MonoBehaviour
     protected virtual void Start()
     {
         ApplyEnemyData();
+        if (IsBoss)
+        {
+            OnBossSpawned?.Invoke(this);
+            OnBossHealthChanged?.Invoke(health, enemyData.maxHealth);
+        }
         if (playerTransform == null)
         {
             FindPlayer();
@@ -118,6 +128,11 @@ public abstract class EnemyBase : MonoBehaviour
         if (isDead) return;
 
         health -= damage;
+        if (IsBoss)
+        {
+            OnBossHealthChanged?.Invoke(Mathf.Max(0, health), enemyData.maxHealth);
+        }
+
         if (health <= 0)
         {
             Die();
@@ -140,10 +155,23 @@ public abstract class EnemyBase : MonoBehaviour
         if (isDead) return;
         isDead = true;
 
+        if (IsBoss)
+        {
+            OnBossDied?.Invoke(this);
+        }
+
         OnDeath?.Invoke();
         OnAnyEnemyDied?.Invoke(this);
 
         Destroy(gameObject);
+    }
+
+    protected virtual void OnDestroy()
+    {
+        if (IsBoss && !isDead)
+        {
+            OnBossDied?.Invoke(this);
+        }
     }
 
     protected abstract void Attack();

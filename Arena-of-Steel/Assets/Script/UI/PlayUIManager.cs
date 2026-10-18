@@ -18,11 +18,18 @@ public class PlayUIManager : MonoBehaviour
     [SerializeField] private Transform cardContainer;
     [SerializeField] private GameObject rewardCardPrefab;
 
+    [Header("Boss Bar UI")]
+    [SerializeField] private GameObject bossBarPanel;
+    [SerializeField] private Image bossHpGauge;
+    [SerializeField] private TextMeshProUGUI bossNameText;
+    [SerializeField] private TextMeshProUGUI bossHpText;
+
     private void Awake()
     {
         if (rewardPanel != null) rewardPanel.SetActive(false);
         if (prepTimerText != null) prepTimerText.gameObject.SetActive(false);
         if (interactPromptText != null) interactPromptText.text = string.Empty;
+        if (bossBarPanel != null) bossBarPanel.SetActive(false);
     }
 
     private void OnEnable()
@@ -33,6 +40,9 @@ public class PlayUIManager : MonoBehaviour
         WaveSpawner.OnPrepTimerChanged += UpdatePrepTimerUI;
         WaveSpawner.OnPrepFinished += HidePrepTimerUI;
         WeaponPickup.OnPromptChanged += UpdateInteractPrompt;
+        EnemyBase.OnBossSpawned += ShowBossBar;
+        EnemyBase.OnBossHealthChanged += UpdateBossHealth;
+        EnemyBase.OnBossDied += HideBossBar;
     }
 
     private void OnDisable()
@@ -43,7 +53,11 @@ public class PlayUIManager : MonoBehaviour
         WaveSpawner.OnPrepTimerChanged -= UpdatePrepTimerUI;
         WaveSpawner.OnPrepFinished -= HidePrepTimerUI;
         WeaponPickup.OnPromptChanged -= UpdateInteractPrompt;
+        EnemyBase.OnBossSpawned -= ShowBossBar;
+        EnemyBase.OnBossHealthChanged -= UpdateBossHealth;
+        EnemyBase.OnBossDied -= HideBossBar;
         HidePrepTimerUI();
+        HideBossBar(null);
     }
 
     private void Start()
@@ -187,6 +201,42 @@ public class PlayUIManager : MonoBehaviour
         if (prepTimerText != null)
         {
             prepTimerText.gameObject.SetActive(false);
+        }
+    }
+
+    private void ShowBossBar(EnemyBase boss)
+    {
+        if (bossBarPanel == null || boss == null || boss.enemyData == null) return;
+
+        bossBarPanel.SetActive(true);
+
+        if (bossNameText != null)
+        {
+            string title = !string.IsNullOrEmpty(boss.enemyData.bossTitle) ? $" - {boss.enemyData.bossTitle}" : string.Empty;
+            bossNameText.text = $"{boss.enemyData.enemyName}{title}";
+        }
+
+        UpdateBossHealth(boss.enemyData.maxHealth, boss.enemyData.maxHealth);
+    }
+
+    private void UpdateBossHealth(int currentHealth, int maxHealth)
+    {
+        if (bossHpGauge != null && maxHealth > 0)
+        {
+            bossHpGauge.fillAmount = (float)currentHealth / maxHealth;
+        }
+
+        if (bossHpText != null)
+        {
+            bossHpText.text = $"{Mathf.Max(0, currentHealth)} / {maxHealth}";
+        }
+    }
+
+    private void HideBossBar(EnemyBase boss)
+    {
+        if (bossBarPanel != null)
+        {
+            bossBarPanel.SetActive(false);
         }
     }
 }

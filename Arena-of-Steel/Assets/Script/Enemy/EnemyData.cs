@@ -11,4 +11,8 @@ public class EnemyData : ScriptableObject
     public float attackRange = 2f;
     public float attackCooldown = 1f;
     public int attackDamage = 10;
+
+    [Header("Boss Settings")]
+    public bool isBoss = false;
+    public string bossTitle = "";
 }

@@ -20,3 +20,5 @@ MonoBehaviour:
   attackRange: 50
   attackCooldown: 0.1
   attackDamage: 7
+  isBoss: 1
+  bossTitle: End of Tutorial
