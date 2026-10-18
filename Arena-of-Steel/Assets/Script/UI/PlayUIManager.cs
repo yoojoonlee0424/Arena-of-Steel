@@ -40,9 +40,10 @@ public class PlayUIManager : MonoBehaviour
         StageManager.OnWaveChanged -= UpdateWaveUI;
         WaveSpawner.OnRemainingEnemiesChanged -= UpdateEnemyUI;
         WaveSpawner.OnWaveRewardRequested -= ShowRewardUI;
-        WaveSpawner.OnPrepTimerChanged += UpdatePrepTimerUI;
+        WaveSpawner.OnPrepTimerChanged -= UpdatePrepTimerUI;
         WaveSpawner.OnPrepFinished -= HidePrepTimerUI;
-        WeaponPickup.OnPromptChanged += UpdateInteractPrompt;
+        WeaponPickup.OnPromptChanged -= UpdateInteractPrompt;
+        HidePrepTimerUI();
     }
 
     private void Start()
@@ -169,7 +170,7 @@ public class PlayUIManager : MonoBehaviour
         if (cam != null) cam.SetInputActive(true);
     }
 
-    private void UpdatePrepTimerUI(float secondsRemaining)
+    private void UpdatePrepTimerUI(int secondsRemaining)
     {
         if (prepTimerText == null) return;
 
@@ -178,7 +179,7 @@ public class PlayUIManager : MonoBehaviour
             prepTimerText.gameObject.SetActive(true);
         }
 
-        prepTimerText.text = $"Next Wave: {Mathf.CeilToInt(secondsRemaining)}s";
+        prepTimerText.text = $"Next Wave: {secondsRemaining}s";
     }
 
     private void HidePrepTimerUI()

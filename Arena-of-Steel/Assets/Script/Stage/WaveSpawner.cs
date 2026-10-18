@@ -2,7 +2,15 @@ using System;
 using UnityEngine;
 using UnityEngine.AI;
 
-[System.Serializable]
+public enum WaveState
+{
+    Idle,
+    Preparation,
+    Combat,
+    Reward
+}
+
+[Serializable]
 public class WaveSpawnGroup
 {
     [Tooltip("웨이브 번호 (1부터 시작, 예: 3웨이브는 3)")]
@@ -14,10 +22,12 @@ public class WaveSpawner : MonoBehaviour
 {
     public static event Action<int> OnRemainingEnemiesChanged;
     public static event Action<WaveRewardSO[]> OnWaveRewardRequested;
-    public static event Action<float> OnPrepTimerChanged;
+    public static event Action<int> OnPrepTimerChanged;
     public static event Action OnPrepFinished;
+    public static event Action<WaveState> OnWaveStateChanged;
 
     public static WaveSpawner Instance { get; private set; }
+    public WaveState CurrentState { get; private set; } = WaveState.Idle;
 
     public Transform[] defaultSpawnPoints;
     public WaveSpawnGroup[] waveSpawnPoints;
@@ -29,9 +39,8 @@ public class WaveSpawner : MonoBehaviour
     private int spawnedCount = 0;
     private int aliveCount = 0;
     private int remainingCount = 0;
-    private bool isWaveActive = false;
-    private bool isPrepActive = false;
     private float prepTimer = 0f;
+    private int lastPrepSeconds = -1;
 
     private void Awake()
     {
@@ -58,6 +67,12 @@ public class WaveSpawner : MonoBehaviour
         StageManager.OnWaveChanged -= HandleWaveChanged;
     }
 
+    private void SetState(WaveState newState)
+    {
+        CurrentState = newState;
+        OnWaveStateChanged?.Invoke(newState);
+    }
+
     private void HandleWaveChanged()
     {
         if (StageManager.Instance == null || StageManager.Instance.StageData == null) return;
@@ -67,7 +82,7 @@ public class WaveSpawner : MonoBehaviour
 
         if (stageData.waveDatas == null || currentWaveIndex < 0 || currentWaveIndex >= stageData.waveDatas.Length)
         {
-            isWaveActive = false;
+            SetState(WaveState.Idle);
             return;
         }
 
@@ -75,33 +90,51 @@ public class WaveSpawner : MonoBehaviour
         spawnedCount = 0;
         aliveCount = 0;
         spawnTimer = 0f;
-        isPrepActive = false;
         remainingCount = currentWaveData.totalEnemyCount;
-        isWaveActive = true;
+        SetState(WaveState.Combat);
 
         OnRemainingEnemiesChanged?.Invoke(aliveCount);
 
         if (currentWaveData.totalEnemyCount <= 0)
         {
-            isWaveActive = false;
+            SetState(WaveState.Idle);
             StageManager.Instance.NextWave();
         }
     }
 
     private void Update()
     {
-        if (isPrepActive)
+        switch (CurrentState)
         {
-            prepTimer -= Time.deltaTime;
-            OnPrepTimerChanged?.Invoke(Mathf.Max(0f, prepTimer));
-            if (prepTimer <= 0f)
-            {
-                EndPreparation();
-            }
-            return;
+            case WaveState.Preparation:
+                UpdatePreparation();
+                break;
+            case WaveState.Combat:
+                UpdateCombat();
+                break;
+        }
+    }
+
+    private void UpdatePreparation()
+    {
+        prepTimer -= Time.deltaTime;
+        int currentSeconds = Mathf.CeilToInt(Mathf.Max(0f, prepTimer));
+
+        if (currentSeconds != lastPrepSeconds)
+        {
+            lastPrepSeconds = currentSeconds;
+            OnPrepTimerChanged?.Invoke(currentSeconds);
         }
 
-        if (!isWaveActive || currentWaveData == null) return;
+        if (prepTimer <= 0f)
+        {
+            EndPreparation();
+        }
+    }
+
+    private void UpdateCombat()
+    {
+        if (currentWaveData == null) return;
 
         if (spawnedCount < currentWaveData.totalEnemyCount)
         {
@@ -125,7 +158,7 @@ public class WaveSpawner : MonoBehaviour
 
     private void HandleEnemyDied(EnemyBase enemy)
     {
-        if (!isWaveActive || currentWaveData == null) return;
+        if (CurrentState != WaveState.Combat || currentWaveData == null) return;
 
         aliveCount--;
         if (aliveCount < 0) aliveCount = 0;
@@ -137,20 +170,21 @@ public class WaveSpawner : MonoBehaviour
 
         if (spawnedCount >= currentWaveData.totalEnemyCount && aliveCount == 0)
         {
-            isWaveActive = false;
-
             if (StageManager.Instance != null && StageManager.Instance.StageData != null &&
                 currentWaveIndex + 1 >= StageManager.Instance.StageData.waveDatas.Length)
             {
+                SetState(WaveState.Idle);
                 StageManager.Instance.NextWave();
             }
             else if (StageManager.Instance != null && StageManager.Instance.StageData != null)
             {
+                SetState(WaveState.Reward);
                 var rewards = StageManager.Instance.StageData.GetRewardsForWave(currentWaveIndex);
                 OnWaveRewardRequested?.Invoke(rewards);
             }
             else
             {
+                SetState(WaveState.Idle);
                 StageManager.Instance?.NextWave();
             }
         }
@@ -165,14 +199,15 @@ public class WaveSpawner : MonoBehaviour
             return;
         }
 
-        isPrepActive = true;
+        SetState(WaveState.Preparation);
         prepTimer = duration;
-        OnPrepTimerChanged?.Invoke(prepTimer);
+        lastPrepSeconds = Mathf.CeilToInt(prepTimer);
+        OnPrepTimerChanged?.Invoke(lastPrepSeconds);
     }
 
     public void EndPreparation()
     {
-        isPrepActive = false;
+        SetState(WaveState.Idle);
         OnPrepFinished?.Invoke();
         if (StageManager.Instance != null)
         {
