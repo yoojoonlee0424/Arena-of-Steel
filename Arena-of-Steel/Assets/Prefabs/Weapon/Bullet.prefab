@@ -140,6 +140,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Bullet
   speed: 100
   lifeTime: 3
+  damage: 20
+  pierceCount: 0
+  hitEffect: {fileID: 0}
+  enableVoxelDamage: 1
+  explosionRadius: 1.7
+  distanceFalloff: 0
+  explosionForce: 3.5
+  isolateFragments: 1
+  fragmentLifetime: 6
 --- !u!65 &4573931911899516532
 BoxCollider:
   m_ObjectHideFlags: 0
