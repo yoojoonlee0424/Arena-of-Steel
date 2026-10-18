@@ -25,6 +25,7 @@ public class GameSettingsData
 
     public float mouseSensitivity = 1.0f;
     public bool invertY = true;
+    public bool toggleCrouch = false;
 
     public string keyBindingsJson = string.Empty;
 }

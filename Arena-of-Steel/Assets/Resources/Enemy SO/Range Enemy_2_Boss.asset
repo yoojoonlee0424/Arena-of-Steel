@@ -18,7 +18,7 @@ MonoBehaviour:
   moveSpeed: 3
   stoppingDistance: 5
   attackRange: 50
-  attackCooldown: 0.1
+  attackCooldown: 0.05
   attackDamage: 7
   isBoss: 1
   bossTitle: End of Tutorial

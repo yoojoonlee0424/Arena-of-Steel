@@ -15,6 +15,7 @@ public class SettingManager : MonoBehaviour
     public GameSettingsData CurrentSettings { get; private set; }
 
     public event Action OnBindingsChanged;
+    public event Action<bool> OnToggleCrouchChanged;
     private InputActionRebindingExtensions.RebindingOperation rebindOp;
     private Coroutine saveCoroutine;
     private bool isDirty;
@@ -205,6 +206,13 @@ public class SettingManager : MonoBehaviour
     {
         CurrentSettings.invertY = invert;
         ApplyCamera();
+        Save();
+    }
+
+    public void SetToggleCrouch(bool toggle)
+    {
+        CurrentSettings.toggleCrouch = toggle;
+        OnToggleCrouchChanged?.Invoke(toggle);
         Save();
     }
 

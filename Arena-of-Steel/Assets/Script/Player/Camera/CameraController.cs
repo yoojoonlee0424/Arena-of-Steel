@@ -12,6 +12,7 @@ public class CameraController : MonoBehaviour
     [Header("카메라 설정")]
     [SerializeField] private ControlMode controlMode = ControlMode.FirstPersonView;
     [SerializeField] private Transform cameraTarget;
+    [SerializeField] private Transform thirdPersonTarget;
     [SerializeField] private Transform cameraTransform;
 
     [Header("회전 설정")]
@@ -32,6 +33,9 @@ public class CameraController : MonoBehaviour
     public event Action<ControlMode> OnModeChanged;
 
     public ControlMode Mode => controlMode;
+    public Transform CameraTarget => cameraTarget;
+    public Transform ThirdPersonTarget => thirdPersonTarget;
+    public Transform ActiveTarget => (controlMode == ControlMode.ThirdPersonView && thirdPersonTarget != null) ? thirdPersonTarget : cameraTarget;
     public Vector3 PlanarForward => cameraTransform != null ? Vector3.ProjectOnPlane(cameraTransform.forward, Vector3.up).normalized : Vector3.forward;
     public Vector3 PlanarRight => cameraTransform != null ? Vector3.ProjectOnPlane(cameraTransform.right, Vector3.up).normalized : Vector3.right;
 
@@ -51,10 +55,11 @@ public class CameraController : MonoBehaviour
         if (cameraTransform == null && Camera.main != null)
             cameraTransform = Camera.main.transform;
 
-        if (cameraTarget != null)
+        Transform mainTarget = cameraTarget != null ? cameraTarget : thirdPersonTarget;
+        if (mainTarget != null)
         {
-            cameraYaw = cameraTarget.eulerAngles.y;
-            playerBody = cameraTarget.root;
+            cameraYaw = mainTarget.eulerAngles.y;
+            playerBody = mainTarget.root;
         }
 
         currentDistance = (controlMode == ControlMode.FirstPersonView) ? 0f : defaultDistance;
@@ -103,7 +108,7 @@ public class CameraController : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (cameraTarget == null) return;
+        if (ActiveTarget == null) return;
         EnsureCameraTransform();
         if (cameraTransform == null) return;
 
@@ -131,11 +136,14 @@ public class CameraController : MonoBehaviour
             if (playerBody != null)
                 playerBody.rotation = Quaternion.Euler(0f, cameraYaw, 0f);
 
-            cameraTarget.localRotation = Quaternion.Euler(cameraPitch, 0f, 0f);
+            if (cameraTarget != null)
+                cameraTarget.localRotation = Quaternion.Euler(cameraPitch, 0f, 0f);
         }
         else
         {
-            cameraTarget.rotation = lookRotation;
+            Transform target = ActiveTarget;
+            if (target != null)
+                target.rotation = lookRotation;
         }
 
         cameraTransform.rotation = lookRotation;
@@ -143,6 +151,9 @@ public class CameraController : MonoBehaviour
 
     private void HandlePosition()
     {
+        Transform target = ActiveTarget;
+        if (target == null) return;
+
         bool isFirstPerson = (controlMode == ControlMode.FirstPersonView);
         float targetDist = isFirstPerson ? 0f : defaultDistance;
         Vector3 targetOffset = isFirstPerson ? Vector3.zero : shoulderOffset;
@@ -160,26 +171,26 @@ public class CameraController : MonoBehaviour
 
         if (isFirstPerson && (!smoothTransition || currentDistance < 0.05f))
         {
-            cameraTransform.position = cameraTarget.position;
+            cameraTransform.position = target.position;
             return;
         }
 
-        Vector3 shoulderPos = cameraTarget.position + cameraTarget.rotation * currentShoulderOffset;
+        Vector3 shoulderPos = target.position + target.rotation * currentShoulderOffset;
         float finalDist = currentDistance;
 
         if (finalDist > minDistance)
         {
-            Ray ray = new Ray(shoulderPos, -cameraTarget.forward);
+            Ray ray = new Ray(shoulderPos, -target.forward);
             if (Physics.SphereCast(ray, collisionRadius, out RaycastHit hit, finalDist, collisionLayers, QueryTriggerInteraction.Ignore))
             {
-                if (hit.collider.transform.root != cameraTarget.root)
+                if (hit.collider.transform.root != target.root)
                 {
                     finalDist = Mathf.Clamp(hit.distance - collisionRadius, minDistance, finalDist);
                 }
             }
         }
 
-        cameraTransform.position = shoulderPos - cameraTarget.forward * finalDist;
+        cameraTransform.position = shoulderPos - target.forward * finalDist;
     }
 
     private void EnsureCameraTransform()
@@ -188,11 +199,15 @@ public class CameraController : MonoBehaviour
             cameraTransform = Camera.main.transform;
     }
 
-    public void SetTarget(Transform newTarget)
+    public void SetTarget(Transform newTarget, Transform newThirdPersonTarget = null)
     {
         cameraTarget = newTarget;
-        playerBody = cameraTarget != null ? cameraTarget.root : null;
-        if (cameraTarget != null) cameraYaw = cameraTarget.eulerAngles.y;
+        if (newThirdPersonTarget != null)
+            thirdPersonTarget = newThirdPersonTarget;
+
+        Transform mainTarget = cameraTarget != null ? cameraTarget : thirdPersonTarget;
+        playerBody = mainTarget != null ? mainTarget.root : null;
+        if (mainTarget != null) cameraYaw = mainTarget.eulerAngles.y;
     }
 
     public void ToggleView()

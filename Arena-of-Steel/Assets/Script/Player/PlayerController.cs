@@ -16,6 +16,14 @@ public class PlayerController : MonoBehaviour
     [Header("점프 설정")]
     [SerializeField] private float jumpPower = 2f;
 
+    [Header("웅크리기 설정")]
+    [SerializeField] private float crouchSpeed = 1.5f;
+    [SerializeField] private float crouchHeight = 1.2f;
+    [SerializeField] private float crouchCameraHeight = 0.0f;
+    [SerializeField] private float crouchTransitionSpeed = 10f;
+    [SerializeField] private bool toggleCrouch = false;
+    [SerializeField] private LayerMask ceilingLayers = ~0;
+
     [Header("바닥 설정")]
     [SerializeField] private float gravity = -20f;
 
@@ -34,6 +42,11 @@ public class PlayerController : MonoBehaviour
     private float verticalVelocity;
     public bool isRunning { get; private set; }
     public bool isDashing { get; private set; }
+    public bool isCrouching { get; private set; }
+    private bool wantCrouch;
+    private float standingHeight = 2.0f;
+    private Vector3 standingCenter = Vector3.zero;
+    private float standingCameraLocalY = 0.6f;
     private float dashTimer;
     private float dashCooldownTimer;
     private int currentAirDashes;
@@ -62,11 +75,25 @@ public class PlayerController : MonoBehaviour
             cameraController = GetComponent<CameraController>();
         if (cameraController == null)
             cameraController = FindAnyObjectByType<CameraController>();
+
+        if (controller != null)
+        {
+            standingHeight = controller.height;
+            standingCenter = controller.center;
+        }
+
+        Transform camTarget = cameraController != null ? cameraController.CameraTarget : null;
+        if (camTarget != null)
+        {
+            standingCameraLocalY = camTarget.localPosition.y;
+        }
     }
 
     private void Start()
     {
         SettingManager.Instance?.ApplyBindings(inputActions.asset);
+        if (SettingManager.Instance != null)
+            toggleCrouch = SettingManager.Instance.CurrentSettings.toggleCrouch;
         if (cameraController != null)
             UpdateMeshVisibility(cameraController.Mode);
     }
@@ -79,7 +106,10 @@ public class PlayerController : MonoBehaviour
         if (cameraController != null)
             cameraController.OnModeChanged += UpdateMeshVisibility;
         if (SettingManager.Instance != null)
+        {
             SettingManager.Instance.OnBindingsChanged += OnBindingsChanged;
+            SettingManager.Instance.OnToggleCrouchChanged += OnToggleCrouchChanged;
+        }
     }
 
     private void OnDisable()
@@ -90,12 +120,20 @@ public class PlayerController : MonoBehaviour
         if (cameraController != null)
             cameraController.OnModeChanged -= UpdateMeshVisibility;
         if (SettingManager.Instance != null)
+        {
             SettingManager.Instance.OnBindingsChanged -= OnBindingsChanged;
+            SettingManager.Instance.OnToggleCrouchChanged -= OnToggleCrouchChanged;
+        }
     }
 
     private void OnBindingsChanged()
     {
         SettingManager.Instance?.ApplyBindings(inputActions.asset);
+    }
+
+    private void OnToggleCrouchChanged(bool toggle)
+    {
+        toggleCrouch = toggle;
     }
 
     public void SetInputActive(bool active)
@@ -109,6 +147,7 @@ public class PlayerController : MonoBehaviour
             inputActions?.Player.Disable();
             moveVelocity = Vector3.zero;
             isDashing = false;
+            wantCrouch = false;
         }
     }
 
@@ -138,9 +177,78 @@ public class PlayerController : MonoBehaviour
             cameraController?.ToggleView();
         }
 
+        HandleCrouch();
         HandleMovement();
         HandleJump();
         ApplyGravity();
+    }
+
+    /// <summary>
+    /// 머리 위에 장애물이 없어 일어설 수 있는지 검사합니다.
+    /// </summary>
+    public bool CanStandUp()
+    {
+        if (controller == null) return true;
+
+        float radius = controller.radius * 0.9f;
+        Vector3 feet = transform.position + standingCenter - Vector3.up * (standingHeight * 0.5f);
+        Vector3 bottom = feet + Vector3.up * radius;
+        Vector3 top = feet + Vector3.up * (standingHeight - radius);
+
+        Collider[] hits = Physics.OverlapCapsule(bottom, top, radius, ceilingLayers, QueryTriggerInteraction.Ignore);
+        for (int i = 0; i < hits.Length; i++)
+        {
+            if (hits[i].transform.root != transform.root)
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// 웅크리기 입력 처리 및 캐릭터 컨트롤러, 카메라 높이 보간을 수행합니다.
+    /// </summary>
+    private void HandleCrouch()
+    {
+        if (inputActions == null || controller == null) return;
+
+        if (toggleCrouch)
+        {
+            if (inputActions.Player.Crouch.WasPressedThisFrame())
+                wantCrouch = !wantCrouch;
+        }
+        else
+        {
+            wantCrouch = inputActions.Player.Crouch.IsPressed();
+        }
+
+        if (wantCrouch)
+        {
+            isCrouching = true;
+        }
+        else if (isCrouching && CanStandUp())
+        {
+            isCrouching = false;
+        }
+
+        float targetHeight = isCrouching ? crouchHeight : standingHeight;
+        if (Mathf.Abs(controller.height - targetHeight) > 0.001f)
+        {
+            float newHeight = Mathf.MoveTowards(controller.height, targetHeight, crouchTransitionSpeed * Time.deltaTime);
+            controller.height = newHeight;
+            controller.center = new Vector3(standingCenter.x, standingCenter.y - (standingHeight - newHeight) * 0.5f, standingCenter.z);
+        }
+
+        Transform camTarget = cameraController != null ? cameraController.CameraTarget : null;
+        if (camTarget != null)
+        {
+            float targetCamY = isCrouching ? crouchCameraHeight : standingCameraLocalY;
+            Vector3 lp = camTarget.localPosition;
+            if (Mathf.Abs(lp.y - targetCamY) > 0.001f)
+            {
+                lp.y = Mathf.MoveTowards(lp.y, targetCamY, crouchTransitionSpeed * Time.deltaTime);
+                camTarget.localPosition = lp;
+            }
+        }
     }
 
     private void HandleMovement()
@@ -155,9 +263,15 @@ public class PlayerController : MonoBehaviour
         input = Vector2.ClampMagnitude(input, 1f);
 
         bool wantRun = inputActions.Player.Sprint.IsPressed() && input.sqrMagnitude > 0.001f;
-        isRunning = wantRun && playerStamina != null && playerStamina.UseStamina(staminaDrainRate * Time.deltaTime);
+        if (wantRun && isCrouching && CanStandUp())
+        {
+            wantCrouch = false;
+            isCrouching = false;
+        }
 
-        float currentSpeed = isRunning ? runSpeed : walkSpeed;
+        isRunning = !isCrouching && wantRun && playerStamina != null && playerStamina.UseStamina(staminaDrainRate * Time.deltaTime);
+
+        float currentSpeed = isCrouching ? crouchSpeed : (isRunning ? runSpeed : walkSpeed);
 
         Vector3 camForward = cameraController != null ? cameraController.PlanarForward : transform.forward;
         Vector3 camRight = cameraController != null ? cameraController.PlanarRight : transform.right;
@@ -177,9 +291,22 @@ public class PlayerController : MonoBehaviour
     {
         if (controller == null || !controller.enabled || isDashing) return;
 
-        if (inputActions.Player.Jump.WasPressedThisFrame() && controller.isGrounded)
+        if (inputActions.Player.Jump.WasPressedThisFrame())
         {
-            verticalVelocity = Mathf.Sqrt(jumpPower * -2f * gravity);
+            if (isCrouching)
+            {
+                if (CanStandUp())
+                {
+                    wantCrouch = false;
+                    isCrouching = false;
+                }
+                return;
+            }
+
+            if (controller.isGrounded)
+            {
+                verticalVelocity = Mathf.Sqrt(jumpPower * -2f * gravity);
+            }
         }
     }
 
@@ -212,6 +339,12 @@ public class PlayerController : MonoBehaviour
         if (isDashing || dashCooldownTimer > 0f) return;
         if (controller != null && !controller.isGrounded && maxAirDashes > 0 && currentAirDashes >= maxAirDashes) return;
         if (playerStamina != null && !playerStamina.UseStamina(dashManaCost)) return;
+
+        if (isCrouching && CanStandUp())
+        {
+            wantCrouch = false;
+            isCrouching = false;
+        }
 
         Vector3 camForward = cameraController != null ? cameraController.PlanarForward : transform.forward;
         Vector3 camRight = cameraController != null ? cameraController.PlanarRight : transform.right;

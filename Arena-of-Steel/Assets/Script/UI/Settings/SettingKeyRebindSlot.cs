@@ -13,6 +13,7 @@ public class SettingKeyRebindSlot : MonoBehaviour
 
     [Header("설정 정보")]
     [SerializeField] private InputActionReference actionReference;
+    [SerializeField] private string actionName;
     [SerializeField] private string bindingId;
     [SerializeField] private string displayName;
 
@@ -43,6 +44,10 @@ public class SettingKeyRebindSlot : MonoBehaviour
         if (actionReference != null && actionReference.action != null)
         {
             targetAction = asset != null ? asset.FindAction(actionReference.action.id) : actionReference.action;
+        }
+        else if (asset != null && !string.IsNullOrEmpty(actionName))
+        {
+            targetAction = asset.FindAction(actionName);
         }
         else
         {
@@ -123,13 +128,22 @@ public class SettingKeyRebindSlot : MonoBehaviour
 
     private static int FindBindingIndex(InputAction action, string idString)
     {
-        if (action == null || string.IsNullOrEmpty(idString)) return -1;
+        if (action == null) return -1;
 
-        if (!Guid.TryParse(idString, out var targetId)) return -1;
+        if (!string.IsNullOrEmpty(idString) && Guid.TryParse(idString, out var targetId))
+        {
+            for (int i = 0; i < action.bindings.Count; i++)
+            {
+                if (action.bindings[i].id == targetId)
+                {
+                    return i;
+                }
+            }
+        }
 
         for (int i = 0; i < action.bindings.Count; i++)
         {
-            if (action.bindings[i].id == targetId)
+            if (!action.bindings[i].isComposite && !action.bindings[i].isPartOfComposite)
             {
                 return i;
             }

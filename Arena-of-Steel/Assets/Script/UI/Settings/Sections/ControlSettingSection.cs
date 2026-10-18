@@ -5,6 +5,7 @@ public class ControlSettingSection : SettingSection
 {
     [SerializeField] private SettingSliderControl sensControl;
     [SerializeField] private Toggle invertYToggle;
+    [SerializeField] private Toggle toggleCrouchToggle;
     [SerializeField] private Button resetBindingsButton;
 
     private SettingKeyRebindSlot[] keySlots;
@@ -26,6 +27,13 @@ public class ControlSettingSection : SettingSection
         {
             invertYToggle.SetIsOnWithoutNotify(settings.invertY);
             invertYToggle.onValueChanged.AddListener(manager.SetInvertY);
+        }
+
+        if (toggleCrouchToggle != null)
+        {
+            toggleCrouchToggle.onValueChanged.RemoveAllListeners();
+            toggleCrouchToggle.SetIsOnWithoutNotify(settings.toggleCrouch);
+            toggleCrouchToggle.onValueChanged.AddListener(manager.SetToggleCrouch);
         }
 
         if (inputActions == null)
