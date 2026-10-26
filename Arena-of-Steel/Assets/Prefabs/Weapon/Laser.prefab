@@ -140,8 +140,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Bullet
   speed: 1000
   lifeTime: 0.1
-  damage: 60
-  pierceCount: 3
+  damage: 55
+  pierceCount: 5
   hitEffect: {fileID: 0}
   enableVoxelDamage: 1
   explosionRadius: 1.7

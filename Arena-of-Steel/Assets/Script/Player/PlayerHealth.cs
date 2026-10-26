@@ -31,6 +31,7 @@ public class PlayerHealth : MonoBehaviour
     public void TakeDamage(int damage)
     {
         DecreaseHealth(damage);
+        CameraShake.Instance.Shake();
     }
 
     private void DecreaseHealth(int decreaseAmount)
