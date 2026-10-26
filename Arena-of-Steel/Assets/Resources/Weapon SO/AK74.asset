@@ -23,8 +23,8 @@ MonoBehaviour:
   yawRandomness: 1
   returnStrength: 40
   damping: 18
-  aimSmoothTime: 20
+  aimSmoothTime: 35
   aimOffsetX: 0
-  aimOffsetY: 0.02
-  aimOffsetZ: 0
+  aimOffsetY: 0.025
+  aimOffsetZ: -0.005
   pickupPrefab: {fileID: 1191483000086003563, guid: 913ec988a73694745be1fb65b5f5236b, type: 3}
