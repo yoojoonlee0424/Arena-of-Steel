@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f7cf3c3c9e2ee7145ac2a0ba9986cc8a, type: 3}
+  m_Name: Reward_LaserGun
+  m_EditorClassIdentifier: Assembly-CSharp::WaveRewardSO
+  rewardName: LaserGun
+  description: 'LaserGun
+
+'
+  icon: {fileID: 0}
+  rewardType: 1
+  intValue: 0
+  weaponData: {fileID: 11400000, guid: 00759430567ebdd48a8fe7386691a19e, type: 2}

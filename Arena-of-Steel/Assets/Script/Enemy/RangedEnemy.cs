@@ -10,6 +10,8 @@ public class RangedEnemy : EnemyBase
 
     private float lastShotTime = 0f;
 
+    public bool isShooting = false;
+
     protected override void Attack()
     {
         if (enemyData == null || bulletPrefab == null || bulletSpwanPoint == null) return;
@@ -26,6 +28,7 @@ public class RangedEnemy : EnemyBase
         bulletRotation *= Quaternion.Euler(randomPitch, randomYaw + 90f, 0f);
 
         GameObject bulletObj = Instantiate(bulletPrefab, bulletSpwanPoint.position, bulletRotation);
+        isShooting = true;
         Bullet bulletComp = bulletObj.GetComponent<Bullet>();
         if (bulletComp != null)
         {
