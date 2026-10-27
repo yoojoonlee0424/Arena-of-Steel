@@ -285,7 +285,7 @@ MonoBehaviour:
   lifeTime: 0.1
   damage: 55
   pierceCount: 5
-  hitEffect: {fileID: 0}
+  hitEffect: {fileID: 3145650275829236824, guid: 77bb41ef3ede4ac429328d5ded0822e4, type: 3}
   enableVoxelDamage: 1
   explosionRadius: 2
   distanceFalloff: 0
@@ -305,7 +305,7 @@ BoxCollider:
     m_Bits: 0
   m_ExcludeLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 256
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
@@ -332,7 +332,7 @@ Rigidbody:
     m_Bits: 0
   m_ExcludeLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 256
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
   m_UseGravity: 0

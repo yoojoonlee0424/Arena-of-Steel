@@ -119,7 +119,7 @@ Transform:
   m_GameObject: {fileID: 6253391593911018001}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 3.03501, y: 3.31446, z: 4.04337}
+  m_LocalPosition: {x: 3.5854907, y: 2.4258077, z: 4.04337}
   m_LocalScale: {x: 0.068975, y: 0.068975, z: 0.068975}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -142,7 +142,7 @@ MonoBehaviour:
   lifeTime: 3
   damage: 20
   pierceCount: 0
-  hitEffect: {fileID: 0}
+  hitEffect: {fileID: 3145650275829236824, guid: b4e34f5af063fa94c95418e1fae996f1, type: 3}
   enableVoxelDamage: 1
   explosionRadius: 1.7
   distanceFalloff: 0
@@ -162,7 +162,7 @@ BoxCollider:
     m_Bits: 0
   m_ExcludeLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 256
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
@@ -189,7 +189,7 @@ Rigidbody:
     m_Bits: 0
   m_ExcludeLayers:
     serializedVersion: 2
-    m_Bits: 0
+    m_Bits: 256
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
   m_UseGravity: 0
