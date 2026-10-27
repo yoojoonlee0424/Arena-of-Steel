@@ -15,7 +15,7 @@ MonoBehaviour:
   reloadTime: 3.5
   fireRate: 0.6
   magsize: 20
-  damage: 55
+  damage: 75
   bullet: {fileID: 6253391593911018001, guid: 9b4be8d69a1196640a06ceb363528291, type: 3}
   weaponFlash: {fileID: 4377480359558679972, guid: 598aa46043c69454cbd5695139393c34, type: 3}
   pitchKick: -1

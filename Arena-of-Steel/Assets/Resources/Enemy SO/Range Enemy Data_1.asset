@@ -14,11 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyData
   enemyName: Range Enemy_1
   prefab: {fileID: 7960004559390287326, guid: 829342eccc74d2c449cbd357aebf94c3, type: 3}
-  maxHealth: 100
+  maxHealth: 75
   moveSpeed: 2
   stoppingDistance: 5
   attackRange: 30
-  attackCooldown: 0.2
-  attackDamage: 15
+  attackCooldown: 0.1
+  attackDamage: 5
   isBoss: 0
   bossTitle: 
