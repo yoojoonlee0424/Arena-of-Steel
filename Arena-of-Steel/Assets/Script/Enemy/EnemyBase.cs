@@ -163,7 +163,8 @@ public abstract class EnemyBase : MonoBehaviour
         OnDeath?.Invoke();
         OnAnyEnemyDied?.Invoke(this);
 
-        Destroy(gameObject);
+        
+        //Destroy(gameObject);
     }
 
     protected virtual void OnDestroy()
