@@ -22,6 +22,7 @@ public abstract class EnemyBase : MonoBehaviour
     public GameObject EnemyBody;
 
     protected int health;
+    protected RagdollControll ragdollControll;
     protected NavMeshAgent agent;
     protected Transform playerTransform;
     protected Rigidbody rb;
@@ -31,6 +32,7 @@ public abstract class EnemyBase : MonoBehaviour
 
     protected virtual void Awake()
     {
+        ragdollControll = GetComponentInChildren<RagdollControll>();
         agent = GetComponent<NavMeshAgent>();
         rb = GetComponent<Rigidbody>();
         rend = GetComponent<Renderer>();
@@ -164,7 +166,8 @@ public abstract class EnemyBase : MonoBehaviour
         OnAnyEnemyDied?.Invoke(this);
 
         
-        //Destroy(gameObject);
+        if (ragdollControll != null) ragdollControll.BeRagdoll();
+        else Destroy(gameObject);
     }
 
     protected virtual void OnDestroy()

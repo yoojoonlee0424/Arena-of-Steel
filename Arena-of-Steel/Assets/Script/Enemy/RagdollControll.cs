@@ -32,6 +32,6 @@ public class RagdollControll : MonoBehaviour
 
     void DestroyObj()
     {
-        Destroy(gameObject);
+        Destroy(transform.parent.gameObject);
     }
 }
