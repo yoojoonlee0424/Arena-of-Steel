@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &496438635392057785
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3751243227447653291}
+  m_Layer: 8
+  m_Name: Effect Point
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3751243227447653291
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 496438635392057785}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 4, z: 0}
+  m_LocalScale: {x: 0.9999874, y: 0.9999874, z: 0.9999874}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 3351778155552695932}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &3017717943471745324
 GameObject:
   m_ObjectHideFlags: 0
@@ -522,7 +553,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 426d432ed235588448c681c7a9afe0df, type: 3}
       propertyPath: m_Name
-      value: Enemy Ragdoll Melee
+      value: Enemy Ragdoll Boss
       objectReference: {fileID: 0}
     - target: {fileID: 919132149155446097, guid: 426d432ed235588448c681c7a9afe0df, type: 3}
       propertyPath: m_Layer
@@ -571,6 +602,9 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: -8679921383154817045, guid: 426d432ed235588448c681c7a9afe0df, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 3751243227447653291}
     - targetCorrespondingSourceObject: {fileID: 3914898907398930228, guid: 426d432ed235588448c681c7a9afe0df, type: 3}
       insertIndex: -1
       addedObject: {fileID: 2245480628482519997}
@@ -1172,6 +1206,8 @@ MonoBehaviour:
   - {fileID: 3200968016052888693}
   animator: {fileID: 7868676323362568673}
   agent: {fileID: 0}
+  deadEffect: {fileID: 3145650275829236824, guid: bbde1fc4c5a69104b96d2c9b955273e1, type: 3}
+  EffectTransform: {fileID: 3751243227447653291}
 --- !u!1 &3020061590866499732 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -9160256769904436989, guid: 426d432ed235588448c681c7a9afe0df, type: 3}
@@ -1273,6 +1309,11 @@ CharacterJoint:
   m_EnablePreprocessing: 0
   m_MassScale: 1
   m_ConnectedMassScale: 1
+--- !u!4 &3351778155552695932 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 426d432ed235588448c681c7a9afe0df, type: 3}
+  m_PrefabInstance: {fileID: 2956983708656894359}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &5050089552132255662 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -1216863926384480711, guid: 426d432ed235588448c681c7a9afe0df, type: 3}

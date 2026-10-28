@@ -8,6 +8,9 @@ public class RagdollControll : MonoBehaviour
 
     public NavMeshAgent agent;
 
+    public GameObject deadEffect;
+    public Transform EffectTransform;
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
@@ -24,6 +27,9 @@ public class RagdollControll : MonoBehaviour
     {
         animator.enabled = false;
         agent.enabled = false;
+
+        Instantiate(deadEffect, EffectTransform.position, EffectTransform.rotation);
+
         foreach (GameObject joint in joints)
         {
             joint.GetComponent<Rigidbody>().isKinematic = false;

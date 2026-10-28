@@ -18,7 +18,7 @@ MonoBehaviour:
     m_Value: 0
   threshold:
     m_OverrideState: 1
-    m_Value: 0.91
+    m_Value: 1
   intensity:
     m_OverrideState: 1
     m_Value: 2.45
@@ -123,10 +123,10 @@ MonoBehaviour:
     m_Value: 1
   anisotropy:
     m_OverrideState: 1
-    m_Value: 0.23
+    m_Value: 0.304
   scattering:
     m_OverrideState: 1
-    m_Value: 0.285
+    m_Value: 0.146
   tint:
     m_OverrideState: 1
     m_Value: {r: 0.50628924, g: 0.65653664, b: 1, a: 1}
