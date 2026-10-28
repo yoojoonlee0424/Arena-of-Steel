@@ -22,6 +22,7 @@ public class WaveData
 public class StageData : ScriptableObject
 {
     public string StageName = "New Stage";
+    public float StartWaitTime = 0f;
     public WaveData[] waveDatas;
     public WaveRewardSO[] defaultRewardPool;
     public AudioClip BGM;

@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Test Stage Data
   m_EditorClassIdentifier: Assembly-CSharp::StageData
   StageName: Test Stage
+  StartWaitTime: 10
   waveDatas:
   - totalEnemyCount: 5
     maxAliveCount: 5

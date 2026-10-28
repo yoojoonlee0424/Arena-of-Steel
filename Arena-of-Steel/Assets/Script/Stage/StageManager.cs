@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 
 public class StageManager : MonoBehaviour
@@ -11,6 +11,8 @@ public class StageManager : MonoBehaviour
     public static event Action OnWaveChanged;
     public static event Action OnGameClear;
 
+    private bool isGameStarted = false;
+
     private void Awake()
     {
         if (Instance == null) Instance = this;
@@ -20,12 +22,13 @@ public class StageManager : MonoBehaviour
     private void Start()
     {
         ElapsedTime = 0.0f;
-        OnWaveChanged?.Invoke();
 
         if (StageData != null && StageData.BGM != null)
         {
             AudioManager.Instance.PlayBGM(StageData.BGM);
         }
+
+        StartGame();
     }
 
     private void Update()
@@ -33,9 +36,33 @@ public class StageManager : MonoBehaviour
         ElapsedTime += Time.deltaTime;
     }
 
+    public void StartGame()
+    {
+        if (StageData == null || StageData.waveDatas == null || StageData.waveDatas.Length == 0) return;
+
+        currentWave = 0;
+        if (StageData.StartWaitTime > 0f)
+        {
+            isGameStarted = false;
+            WaveSpawner.Instance?.StartPreparationPhase(StageData.StartWaitTime);
+        }
+        else
+        {
+            isGameStarted = true;
+            OnWaveChanged?.Invoke();
+        }
+    }
+
     public void NextWave()
     {
         if (StageData == null || StageData.waveDatas == null) return;
+
+        if (!isGameStarted)
+        {
+            isGameStarted = true;
+            OnWaveChanged?.Invoke();
+            return;
+        }
 
         if (currentWave + 1 < StageData.waveDatas.Length)
         {

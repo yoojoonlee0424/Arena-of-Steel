@@ -190,9 +190,9 @@ public class WaveSpawner : MonoBehaviour
         }
     }
 
-    public void StartPreparationPhase()
+    public void StartPreparationPhase(float customDuration = -1f)
     {
-        float duration = currentWaveData != null ? currentWaveData.prepTime : 10f;
+        float duration = customDuration >= 0f ? customDuration : (currentWaveData != null ? currentWaveData.prepTime : 10f);
         if (duration <= 0f)
         {
             EndPreparation();
