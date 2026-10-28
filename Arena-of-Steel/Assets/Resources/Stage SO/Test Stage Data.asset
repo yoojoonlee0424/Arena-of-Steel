@@ -25,6 +25,7 @@ MonoBehaviour:
       spawnWeight: 1
     rewardPool:
     - {fileID: 11400000, guid: a1234567890123456789012345678901, type: 2}
+    - {fileID: 11400000, guid: b8ba10eb5e537674da47c304d59b350d, type: 2}
   - totalEnemyCount: 10
     maxAliveCount: 10
     SpawnInterval: 0.5
@@ -35,7 +36,6 @@ MonoBehaviour:
     - enemyData: {fileID: 11400000, guid: c37ddd29096402c458f0d494a9f44eec, type: 2}
       spawnWeight: 2
     rewardPool:
-    - {fileID: 11400000, guid: b8ba10eb5e537674da47c304d59b350d, type: 2}
     - {fileID: 11400000, guid: a1234567890123456789012345678901, type: 2}
   - totalEnemyCount: 1
     maxAliveCount: 1

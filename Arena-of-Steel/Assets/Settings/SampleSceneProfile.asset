@@ -71,7 +71,7 @@ MonoBehaviour:
     m_Value: {x: 0.5, y: 0.5}
   intensity:
     m_OverrideState: 1
-    m_Value: 0.379
+    m_Value: 0.431
   smoothness:
     m_OverrideState: 1
     m_Value: 0.2
@@ -93,13 +93,13 @@ MonoBehaviour:
   active: 1
   distance:
     m_OverrideState: 1
-    m_Value: 96
+    m_Value: 159
   baseHeight:
     m_OverrideState: 1
     m_Value: 0
   maximumHeight:
     m_OverrideState: 1
-    m_Value: 50
+    m_Value: 92.32
   enableGround:
     m_OverrideState: 1
     m_Value: 1
@@ -108,7 +108,7 @@ MonoBehaviour:
     m_Value: 0
   density:
     m_OverrideState: 1
-    m_Value: 0.198
+    m_Value: 0.066
   attenuationDistance:
     m_OverrideState: 1
     m_Value: 128
@@ -123,10 +123,10 @@ MonoBehaviour:
     m_Value: 1
   anisotropy:
     m_OverrideState: 1
-    m_Value: 0.4
+    m_Value: 0.23
   scattering:
     m_OverrideState: 1
-    m_Value: 0.15
+    m_Value: 0.285
   tint:
     m_OverrideState: 1
     m_Value: {r: 0.50628924, g: 0.65653664, b: 1, a: 1}
@@ -380,7 +380,7 @@ MonoBehaviour:
         - serializedVersion: 3
           time: 0
           value: 0
-          inSlope: 1
+          inSlope: 0
           outSlope: 1
           tangentMode: 0
           weightedMode: 0
@@ -390,7 +390,7 @@ MonoBehaviour:
           time: 1
           value: 1
           inSlope: 1
-          outSlope: 1
+          outSlope: 0
           tangentMode: 0
           weightedMode: 0
           inWeight: 0
@@ -401,7 +401,7 @@ MonoBehaviour:
   blue:
     m_OverrideState: 1
     m_Value:
-      <length>k__BackingField: 2
+      <length>k__BackingField: 3
       m_Loop: 0
       m_ZeroValue: 0
       m_Range: 1
@@ -411,6 +411,15 @@ MonoBehaviour:
         - serializedVersion: 3
           time: 0
           value: 0
+          inSlope: 1
+          outSlope: 1
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 0.4628821
+          value: 0.51598173
           inSlope: 1
           outSlope: 1
           tangentMode: 0
@@ -499,10 +508,10 @@ MonoBehaviour:
     m_Value: {x: 0.99484044, y: 1, z: 0.92897624, w: 0}
   gamma:
     m_OverrideState: 1
-    m_Value: {x: 0.9993441, y: 0.9885462, z: 1, w: 0}
+    m_Value: {x: 0.93781555, y: 0.95656765, z: 1, w: 0}
   gain:
     m_OverrideState: 1
-    m_Value: {x: 0.9175242, y: 0.96457773, z: 1, w: 0}
+    m_Value: {x: 1, y: 0.9684214, z: 0.9465076, w: 0}
 --- !u!114 &5731656465842736093
 MonoBehaviour:
   m_ObjectHideFlags: 3
