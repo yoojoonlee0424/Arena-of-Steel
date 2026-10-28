@@ -14,11 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::EnemyData
   enemyName: Range Enemy_2_Boss
   prefab: {fileID: 7960004559390287326, guid: ac30aeb5f6ec32c438a2dc5f7ce5ddb6, type: 3}
-  maxHealth: 500
+  maxHealth: 1000
   moveSpeed: 6
-  stoppingDistance: 10
-  attackRange: 100
+  stoppingDistance: 4
+  attackRange: 50
   attackCooldown: 0.7
-  attackDamage: 20
+  attackDamage: 40
   isBoss: 1
-  bossTitle: End of Tutorial
+  bossTitle: LaserBot

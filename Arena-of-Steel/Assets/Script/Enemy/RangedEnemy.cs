@@ -17,7 +17,7 @@ public class RangedEnemy : EnemyBase
         if (enemyData == null || bulletPrefab == null || bulletSpwanPoint == null) return;
         if (Time.time <= lastShotTime + enemyData.attackCooldown) return;
 
-        Vector3 directionToPlayer = (playerTransform.position - transform.position).normalized;
+        Vector3 directionToPlayer = (playerTransform.position - bulletSpwanPoint.position).normalized;
         Quaternion bulletRotation = Quaternion.LookRotation(directionToPlayer);
 
         float maxInaccuracy = 10f;

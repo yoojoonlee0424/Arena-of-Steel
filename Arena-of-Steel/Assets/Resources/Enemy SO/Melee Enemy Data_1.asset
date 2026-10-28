@@ -19,6 +19,6 @@ MonoBehaviour:
   stoppingDistance: 1
   attackRange: 1.5
   attackCooldown: 1
-  attackDamage: 25
+  attackDamage: 15
   isBoss: 0
   bossTitle: 

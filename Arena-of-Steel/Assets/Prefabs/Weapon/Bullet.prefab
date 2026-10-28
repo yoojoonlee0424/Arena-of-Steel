@@ -149,6 +149,8 @@ MonoBehaviour:
   explosionForce: 3.5
   isolateFragments: 1
   fragmentLifetime: 6
+  defaultClip: {fileID: 8300000, guid: 69a0d3a644e46ca43b59b91bc0eb4cc6, type: 3}
+  FireVolume: 1
 --- !u!65 &4573931911899516532
 BoxCollider:
   m_ObjectHideFlags: 0

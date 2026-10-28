@@ -1208,6 +1208,7 @@ MonoBehaviour:
   agent: {fileID: 0}
   deadEffect: {fileID: 3145650275829236824, guid: bbde1fc4c5a69104b96d2c9b955273e1, type: 3}
   EffectTransform: {fileID: 3751243227447653291}
+  defaultClip: {fileID: 8300000, guid: a6641887a3b59d240a4286c3a225fd93, type: 3}
 --- !u!1 &3020061590866499732 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: -9160256769904436989, guid: 426d432ed235588448c681c7a9afe0df, type: 3}

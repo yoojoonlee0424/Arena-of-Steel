@@ -985,7 +985,7 @@ MonoBehaviour:
   walkSpeed: 3
   rotationSpeed: 10
   runSpeed: 6
-  staminaDrainRate: 15
+  staminaDrainRate: 5
   jumpPower: 2
   crouchSpeed: 1.25
   crouchHeight: 1
@@ -996,10 +996,10 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   gravity: -20
-  dashSpeed: 25
+  dashSpeed: 35
   dashDuration: 0.2
-  dashCooldown: 0.8
-  dashManaCost: 50
+  dashCooldown: 0.4
+  dashManaCost: 25
   maxAirDashes: 1
 --- !u!114 &1461269782961662273
 MonoBehaviour:

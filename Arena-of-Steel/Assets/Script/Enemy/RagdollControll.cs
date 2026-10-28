@@ -11,6 +11,9 @@ public class RagdollControll : MonoBehaviour
     public GameObject deadEffect;
     public Transform EffectTransform;
 
+    [Header("Audio")]
+    [SerializeField] private AudioClip defaultClip;
+
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
@@ -29,6 +32,9 @@ public class RagdollControll : MonoBehaviour
         agent.enabled = false;
 
         Instantiate(deadEffect, EffectTransform.position, EffectTransform.rotation);
+
+        Vector3 localPosition = transform.position;
+        AudioManager.Instance.PlaySFXAt(defaultClip, transform.position);
 
         foreach (GameObject joint in joints)
         {

@@ -1,3 +1,4 @@
+using System.Drawing;
 using UnityEngine;
 using VoxelDestructionPro.Vox;
 
@@ -26,6 +27,12 @@ public class Bullet : MonoBehaviour
     private Vector3 flightDir;
     private bool hasHit = false;
 
+
+    [Header("Audio")]
+    [SerializeField] private AudioClip defaultClip;
+    [Range(0f, 1f)]
+    [SerializeField] private float FireVolume = 1f;
+
     void Awake()
     {
         rb = GetComponent<Rigidbody>();
@@ -41,6 +48,9 @@ public class Bullet : MonoBehaviour
             rb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             rb.linearVelocity = flightDir * speed;
         }
+        Vector3 localPosition = transform.position;
+        AudioManager.Instance.PlaySFXAt(defaultClip,transform.position, FireVolume);
+
         Destroy(gameObject, lifeTime);
     }
 

@@ -15,13 +15,13 @@ MonoBehaviour:
   StageName: Test Stage
   StartWaitTime: 10
   waveDatas:
-  - totalEnemyCount: 5
-    maxAliveCount: 5
+  - totalEnemyCount: 15
+    maxAliveCount: 10
     SpawnInterval: 0.75
     prepTime: 10
     enemySpawnEntries:
     - enemyData: {fileID: 11400000, guid: 19fee2c733f6df646a128f6c86efa0d4, type: 2}
-      spawnWeight: 4
+      spawnWeight: 6
     - enemyData: {fileID: 11400000, guid: c37ddd29096402c458f0d494a9f44eec, type: 2}
       spawnWeight: 1
     rewardPool:
